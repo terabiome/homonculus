@@ -3,13 +3,13 @@
 # Hostname and User Configuration
 hostname: {{ .Hostname }}
 users:
-  {{ range .UserConfigs }}
+  {{- range .UserConfigs }}
   - name: {{ .Username}}
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: users,wheel
     shell: /bin/bash
     ssh_authorized_keys:
-      {{ range .SSHAuthorizedKeys }}
+      {{- range .SSHAuthorizedKeys }}
       - {{ .}}
-      {{ end }}
-  {{ end }}
+      {{- end }}
+  {{- end }}

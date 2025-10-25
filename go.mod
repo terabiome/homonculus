@@ -5,6 +5,7 @@ go 1.24.9
 require (
 	github.com/google/uuid v1.6.0
 	github.com/urfave/cli/v2 v2.27.7
+	libvirt.org/go/libvirt v1.11006.0
 )
 
 require (

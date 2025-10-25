@@ -23,7 +23,7 @@ type LibvirtTemplator struct {
 func NewLibvirtTemplator(templatePath string) (*LibvirtTemplator, error) {
 	t := &LibvirtTemplator{&Templator{}}
 
-	tmpl, err := template.New("libvirt-domain.xml.tpl").ParseFiles(templatePath)
+	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse libvirt template file %s: %w", templatePath, err)
 	}
@@ -32,6 +32,6 @@ func NewLibvirtTemplator(templatePath string) (*LibvirtTemplator, error) {
 	return t, nil
 }
 
-func (t *LibvirtTemplator) ToFile(filepath string, data LibvirtTemplatePlaceholder) error {
-	return t.Templator.ToFile(filepath, data)
+func (t *LibvirtTemplator) ToBytes(data LibvirtTemplatePlaceholder) ([]byte, error) {
+	return t.Templator.ToBytes(data)
 }

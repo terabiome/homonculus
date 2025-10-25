@@ -10,7 +10,7 @@
 
     <!-- OS and Boot Configuration -->
     <os>
-        <type arch='x86_64' machine='pc-q35-latest'>hvm</type>
+        <type arch='x86_64'>hvm</type>
         <!-- On first boot, you might boot from a separate install ISO. -->
         <!-- For a running system, boot from the main hard disk. -->
         <boot dev='hd' />
@@ -48,9 +48,13 @@
 
         <!-- Network Interface (VirtIO bridge for high performance) -->
         <interface type='bridge'>
-            <source bridge='br0' />
+            <source bridge='virbr0' />
             <model type='virtio' />
         </interface>
+
+        <graphics type='vnc' port='5901' autoport='yes' listen='0.0.0.0'>
+            <listen type='address' address='0.0.0.0'/>
+        </graphics>
 
         <!-- Essential for headless management -->
         <serial type='pty'>
@@ -58,8 +62,10 @@
                 <model name='isa-serial' />
             </target>
         </serial>
+
         <console type='pty'>
             <target type='serial' port='0' />
         </console>
+
     </devices>
 </domain>

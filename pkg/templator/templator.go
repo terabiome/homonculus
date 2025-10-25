@@ -1,6 +1,7 @@
 package templator
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 )
@@ -21,4 +22,13 @@ func (t *Templator) ToFile(filepath string, data any) error {
 	defer file.Close()
 
 	return t.tmpl.Execute(file, data)
+}
+
+func (t *Templator) ToBytes(data any) ([]byte, error) {
+	buffer := bytes.NewBuffer([]byte{})
+	if err := t.tmpl.Execute(buffer, data); err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
