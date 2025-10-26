@@ -48,7 +48,7 @@
 
         <!-- Network Interface (VirtIO bridge for high performance) -->
         <interface type='bridge'>
-            <source bridge='virbr0' />
+            <source bridge='{{ .BridgeNetworkInterface }}' />
             <model type='virtio' />
         </interface>
 

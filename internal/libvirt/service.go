@@ -21,12 +21,13 @@ func NewService(libvirtTemplator *templator.LibvirtTemplator) *Service {
 
 func (svc *Service) CreateVirtualMachine(request contracts.VirtualMachineRequest, virtualMachineUUID uuid.UUID) error {
 	libvirtTemplatePlaceholder := templator.LibvirtTemplatePlaceholder{
-		Name:             request.Name,
-		UUID:             virtualMachineUUID,
-		VCPU:             request.VCPU,
-		MemoryKiB:        request.MemoryMB << 10,
-		DiskPath:         request.DiskPath,
-		CloudInitISOPath: request.CloudInitISOPath,
+		Name:                   request.Name,
+		UUID:                   virtualMachineUUID,
+		VCPU:                   request.VCPU,
+		MemoryKiB:              request.MemoryMB << 10,
+		DiskPath:               request.DiskPath,
+		CloudInitISOPath:       request.CloudInitISOPath,
+		BridgeNetworkInterface: request.BridgeNetworkInterface,
 	}
 
 	bytes, err := svc.libvirtTemplator.ToBytes(libvirtTemplatePlaceholder)
