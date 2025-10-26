@@ -8,6 +8,7 @@ type VirtualMachineRequest struct {
 	MemoryMB         int64                    `json:"memory_mb"`
 	DiskPath         string                   `json:"disk_path"`
 	DiskSizeGB       int64                    `json:"disk_size_gb"`
+	BaseImagePath    string                   `json:"base_image_path"`
 	CloudInitISOPath string                   `json:"cloud_init_iso_path"`
 	Role             constants.KubernetesRole `json:"role"`
 	UserConfigs      []UserConfig             `json:"user_configs"`

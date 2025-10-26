@@ -35,7 +35,7 @@ func (s *Service) CreateCluster(request contracts.ClusterRequest) error {
 			virtualMachine.DiskSizeGB,
 		)
 
-		if err := s.diskSvc.CreateDisk(virtualMachine.DiskPath, virtualMachine.DiskSizeGB); err != nil {
+		if err := s.diskSvc.CreateDisk(virtualMachine.DiskPath, virtualMachine.BaseImagePath, virtualMachine.DiskSizeGB); err != nil {
 			log.Printf("unable to create QCOW2 disk for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
 			log.Printf("removing QCOW2 disk: err = %v", os.Remove(virtualMachine.DiskPath))
 			continue
