@@ -1,7 +1,9 @@
 <domain type='kvm'>
     <!-- VM Identity -->
     <name>{{ .Name }}</name>
+    {{- if .UUID }}
     <uuid>{{ .UUID }}</uuid>
+    {{- end }}
 
     <!-- Resources -->
     <memory unit='KiB'>{{ .MemoryKiB }}</memory>
@@ -32,19 +34,23 @@
     <!-- Devices -->
     <devices>
         <!-- Main OS Disk (VirtIO for high performance) -->
+        {{- if .DiskPath }}
         <disk type='file' device='disk'>
             <driver name='qemu' type='qcow2' cache='none' io='native' />
             <source file='{{ .DiskPath }}' />
             <target dev='vda' bus='virtio' />
         </disk>
+        {{- end }}
 
         <!-- Cloud-Init ISO (SATA is fine for a CD-ROM) -->
+        {{- if .CloudInitISOPath }}
         <disk type='file' device='cdrom'>
             <driver name='qemu' type='raw' />
             <source file='{{ .CloudInitISOPath }}' />
             <target dev='hdb' bus='sata' />
             <readonly />
         </disk>
+        {{- end }}
 
         <!-- Network Interface (VirtIO bridge for high performance) -->
         <interface type='bridge'>

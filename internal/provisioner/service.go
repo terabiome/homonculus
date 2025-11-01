@@ -41,9 +41,13 @@ func (s *Service) CreateCluster(request contracts.ClusterRequest) error {
 			continue
 		}
 
-		if err := s.ciSvc.CreateISO(virtualMachine); err != nil {
-			log.Printf("unable to create cloud-init ISO for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
-			continue
+		if virtualMachine.CloudInitISOPath != "" {
+			if err := s.ciSvc.CreateISO(virtualMachine); err != nil {
+				log.Printf("unable to create cloud-init ISO for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
+				continue
+			}
+		} else {
+			log.Printf("skipping cloud-init part due to empty path")
 		}
 
 		if err := s.libvirtSvc.CreateVirtualMachine(virtualMachine, virtualMachineUUID); err != nil {
