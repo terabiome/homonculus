@@ -57,3 +57,15 @@ func (s *Service) CreateCluster(request contracts.ClusterRequest) error {
 	}
 	return nil
 }
+
+func (s *Service) DeleteCluster(request contracts.ClusterRequest) error {
+	for _, virtualMachine := range request.VirtualMachines {
+		virtualMachineUUID := uuid.New()
+
+		if err := s.libvirtSvc.DeleteVirtualMachine(virtualMachine, virtualMachineUUID); err != nil {
+			log.Printf("unable to remove VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
+			continue
+		}
+	}
+	return nil
+}

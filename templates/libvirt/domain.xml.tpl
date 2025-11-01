@@ -13,9 +13,8 @@
     <!-- OS and Boot Configuration -->
     <os>
         <type arch='x86_64'>hvm</type>
-        <!-- On first boot, you might boot from a separate install ISO. -->
-        <!-- For a running system, boot from the main hard disk. -->
         <boot dev='hd' />
+        <boot dev='cdrom' />
     </os>
 
     <!-- Performance & Compatibility Features -->
@@ -38,7 +37,8 @@
         <disk type='file' device='disk'>
             <driver name='qemu' type='qcow2' cache='none' io='native' />
             <source file='{{ .DiskPath }}' />
-            <target dev='vda' bus='virtio' />
+            <target dev='vdb' bus='virtio' />
+            {{/* <boot order='1'/> */}}
         </disk>
         {{- end }}
 
@@ -47,7 +47,8 @@
         <disk type='file' device='cdrom'>
             <driver name='qemu' type='raw' />
             <source file='{{ .CloudInitISOPath }}' />
-            <target dev='hdb' bus='sata' />
+            <target dev='hdc' bus='sata' />
+            {{/* <boot order='2'/> */}}
             <readonly />
         </disk>
         {{- end }}

@@ -70,6 +70,28 @@ func main() {
 							return nil
 						},
 					},
+					{
+						Name:  "delete",
+						Usage: "Delete virtual machine(s)",
+						Action: func(ctx *cli.Context) error {
+							filepath := ctx.Args().First()
+							if filepath == "" {
+								return errors.New("empty file path to virtualmachine config")
+							}
+
+							f, _ := os.Open(filepath)
+
+							var clusterRequest contracts.ClusterRequest
+							err = json.NewDecoder(f).Decode(&clusterRequest)
+
+							err := provisionerService.DeleteCluster(clusterRequest)
+							if err != nil {
+								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
+							}
+
+							return nil
+						},
+					},
 				},
 			},
 		},
