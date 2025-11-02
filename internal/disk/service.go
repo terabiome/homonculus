@@ -19,7 +19,6 @@ func NewService() *Service {
 func (s *Service) CreateDisk(diskpath, baseImagePath string, sizeGB int64) error {
 	log.Printf("Running qemu-img create for %s with base image %s ...", diskpath, baseImagePath)
 
-	// Create parent directories
 	dir := filepath.Dir(diskpath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -33,11 +32,10 @@ func (s *Service) CreateDisk(diskpath, baseImagePath string, sizeGB int64) error
 		return fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
 	}
 
-	// The qemu-img command
 	cmd := exec.Command(
 		"qemu-img", "create",
 		"-b", baseImagePath,
-		"-B", "qcow2",
+		"-B", backingFileFormat,
 		"-f", "qcow2",
 		diskpath, fmt.Sprintf("%dG", sizeGB),
 	)

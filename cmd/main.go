@@ -57,13 +57,18 @@ func main() {
 								return errors.New("empty file path to virtualmachine config")
 							}
 
-							f, _ := os.Open(filepath)
+							f, err := os.Open(filepath)
+							if err != nil {
+								return err
+							}
+							defer f.Close()
 
 							var clusterRequest contracts.CreateVirtualMachineClusterRequest
-							err = json.NewDecoder(f).Decode(&clusterRequest)
+							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
+								return err
+							}
 
-							err := provisionerService.CreateCluster(clusterRequest)
-							if err != nil {
+							if err := provisionerService.CreateCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to create virtual machines from template data: %w", err)
 							}
 
@@ -79,13 +84,18 @@ func main() {
 								return errors.New("empty file path to virtualmachine config")
 							}
 
-							f, _ := os.Open(filepath)
+							f, err := os.Open(filepath)
+							if err != nil {
+								return err
+							}
+							defer f.Close()
 
 							var clusterRequest contracts.DeleteVirtualMachineClusterRequest
-							err = json.NewDecoder(f).Decode(&clusterRequest)
+							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
+								return err
+							}
 
-							err := provisionerService.DeleteCluster(clusterRequest)
-							if err != nil {
+							if err := provisionerService.DeleteCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
 							}
 
@@ -101,13 +111,18 @@ func main() {
 								return errors.New("empty file path to virtualmachine config")
 							}
 
-							f, _ := os.Open(filepath)
+							f, err := os.Open(filepath)
+							if err != nil {
+								return err
+							}
+							defer f.Close()
 
 							var clusterRequest contracts.CloneVirtualMachineClusterRequest
-							err = json.NewDecoder(f).Decode(&clusterRequest)
+							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
+								return err
+							}
 
-							err := provisionerService.CloneCluster(clusterRequest)
-							if err != nil {
+							if err := provisionerService.CloneCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
 							}
 

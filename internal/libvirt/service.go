@@ -3,7 +3,7 @@ package libvirt
 import (
 	"fmt"
 	"log"
-	"os/exec"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
@@ -42,6 +42,7 @@ func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineR
 	if err != nil {
 		return fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
+	defer conn.Close()
 	log.Println("connected to hypervisor")
 
 	domain, err := conn.DomainDefineXML(string(bytes))
@@ -63,6 +64,7 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 	if err != nil {
 		return "", fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
+	defer conn.Close()
 	log.Println("connected to hypervisor")
 
 	domain, err := conn.LookupDomainByName(request.Name)
@@ -84,7 +86,10 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 	}
 	log.Println("parsed domain XML")
 
-	vmUUID, _ := domain.GetUUIDString()
+	vmUUID, err := domain.GetUUIDString()
+	if err != nil {
+		return "", fmt.Errorf("could not get VM UUID: %w", err)
+	}
 
 	for _, disk := range domainXML.Devices.Disks {
 		log.Printf("deleting %v disk for VM %s (uuid = %v)...",
@@ -92,12 +97,8 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 			request.Name,
 			vmUUID,
 		)
-		cmd := exec.Command(
-			"rm", "-f", disk.Source.File.File,
-		)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return "", fmt.Errorf("could not delete disk in VM: %w - %s", err, string(output))
+		if err := os.Remove(disk.Source.File.File); err != nil {
+			return "", fmt.Errorf("could not delete disk in VM: %w", err)
 		}
 	}
 
@@ -113,7 +114,7 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 	}
 	log.Println("undefined VM")
 
-	return domain.GetUUIDString()
+	return vmUUID, nil
 }
 
 func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
@@ -121,6 +122,7 @@ func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
+	defer conn.Close()
 	log.Println("connected to hypervisor")
 
 	domain, err := conn.LookupDomainByName(name)
@@ -129,7 +131,7 @@ func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
 	}
 	log.Println("looked up VM by name")
 
-	return domain, err
+	return domain, nil
 }
 
 func (svc *Service) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error) {
@@ -153,9 +155,9 @@ func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetI
 	if err != nil {
 		return fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
+	defer conn.Close()
 	log.Println("connected to hypervisor")
 
-	// clone XML data
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
 	newDomainXML.UUID = virtualMachineUUID.String()
@@ -189,5 +191,4 @@ func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetI
 	log.Println("started VM from Libvirt XML")
 
 	return nil
-
 }
