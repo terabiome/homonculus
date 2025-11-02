@@ -22,9 +22,6 @@ func NewService(d *disk.Service, c *cloudinit.Service, l *libvirt.Service) *Serv
 	return &Service{diskSvc: d, ciSvc: c, libvirtSvc: l}
 }
 
-// CreateCluster uses disk service to create VM disk,
-// uses cloud-init service to create cloud-init ISO (templating),
-// uses Libvirt service to define domain (templating)
 func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterRequest) error {
 	var failedVMs []string
 
@@ -45,7 +42,7 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 		}
 
 		if virtualMachine.CloudInitISOPath != "" {
-			if err := s.ciSvc.CreateISO(virtualMachine); err != nil {
+			if err := s.ciSvc.CreateISO(virtualMachine, virtualMachineUUID); err != nil {
 				log.Printf("unable to create cloud-init ISO for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
 				log.Printf("cleaning up disk: err = %v", os.Remove(virtualMachine.DiskPath))
 				failedVMs = append(failedVMs, virtualMachine.Name)

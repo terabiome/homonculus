@@ -7,22 +7,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
-
+	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"libvirt.org/go/libvirt"
 	"libvirt.org/go/libvirtxml"
 )
 
 type Service struct {
-	libvirtTemplator *templator.LibvirtTemplator
+	engine *templator.Engine
 }
 
-func NewService(libvirtTemplator *templator.LibvirtTemplator) *Service {
-	return &Service{libvirtTemplator}
+func NewService(engine *templator.Engine) *Service {
+	return &Service{engine: engine}
 }
 
 func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineRequest, virtualMachineUUID uuid.UUID) error {
-	libvirtTemplatePlaceholder := templator.LibvirtTemplatePlaceholder{
+	vars := LibvirtTemplateVars{
 		Name:                   request.Name,
 		UUID:                   virtualMachineUUID,
 		VCPU:                   request.VCPU,
@@ -32,7 +32,7 @@ func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineR
 		BridgeNetworkInterface: request.BridgeNetworkInterface,
 	}
 
-	bytes, err := svc.libvirtTemplator.ToBytes(libvirtTemplatePlaceholder)
+	bytes, err := svc.engine.RenderToBytes(constants.TemplateLibvirt, vars)
 	if err != nil {
 		return fmt.Errorf("could not create Libvirt XML in memory: %w", err)
 	}

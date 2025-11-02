@@ -8,33 +8,25 @@ import (
 	"os"
 
 	"github.com/terabiome/homonculus/internal/cloudinit"
+	"github.com/terabiome/homonculus/internal/config"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/internal/disk"
 	"github.com/terabiome/homonculus/internal/libvirt"
 	"github.com/terabiome/homonculus/internal/provisioner"
+	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"github.com/urfave/cli/v2"
 )
 
 func main() {
-	libvirtTemplator, err := templator.NewLibvirtTemplator("./templates/libvirt/domain.xml.tpl")
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("could not create Libvirt templator from template file: %v", err)
+		log.Fatalf("configuration error: %v", err)
 	}
-
-	cloudInitTemplator, err := templator.NewCloudInitTemplator("./templates/cloudinit/user-data.tpl")
-	if err != nil {
-		log.Fatalf("could not create cloud-init templator from template file: %v", err)
-	}
-
-	provisionerService := provisioner.NewService(
-		disk.NewService(),
-		cloudinit.NewService(cloudInitTemplator),
-		libvirt.NewService(libvirtTemplator),
-	)
 
 	app := &cli.App{
 		Name:                 "homonculus",
+		Usage:                "Provision and manage libvirt virtual machines",
 		EnableBashCompletion: true,
 		Commands: []*cli.Command{
 			{
@@ -52,6 +44,11 @@ func main() {
 						Name:  "create",
 						Usage: "Create virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
+							provisionerService, err := initProvisioner(cfg)
+							if err != nil {
+								return err
+							}
+
 							filepath := ctx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
@@ -79,6 +76,11 @@ func main() {
 						Name:  "delete",
 						Usage: "Delete virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
+							provisionerService, err := initProvisioner(cfg)
+							if err != nil {
+								return err
+							}
+
 							filepath := ctx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
@@ -106,6 +108,11 @@ func main() {
 						Name:  "clone",
 						Usage: "Clone virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
+							provisionerService, err := initProvisioner(cfg)
+							if err != nil {
+								return err
+							}
+
 							filepath := ctx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
@@ -137,4 +144,34 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		panic(err)
 	}
+}
+
+func initProvisioner(cfg *config.Config) (*provisioner.Service, error) {
+	engine := templator.NewEngine()
+
+	if err := engine.LoadTemplate(constants.TemplateLibvirt, cfg.LibvirtTemplatePath); err != nil {
+		return nil, err
+	}
+
+	if err := engine.LoadTemplate(constants.TemplateCloudInitUserData, cfg.CloudInitUserDataTemplate); err != nil {
+		return nil, err
+	}
+
+	if cfg.CloudInitMetaDataTemplate != "" {
+		if err := engine.LoadTemplate(constants.TemplateCloudInitMetaData, cfg.CloudInitMetaDataTemplate); err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.CloudInitNetworkConfigTemplate != "" {
+		if err := engine.LoadTemplate(constants.TemplateCloudInitNetworkConfig, cfg.CloudInitNetworkConfigTemplate); err != nil {
+			return nil, err
+		}
+	}
+
+	return provisioner.NewService(
+		disk.NewService(),
+		cloudinit.NewService(engine),
+		libvirt.NewService(engine),
+	), nil
 }
