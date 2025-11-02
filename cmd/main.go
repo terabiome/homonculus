@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/terabiome/homonculus/internal/cloudinit"
 	"github.com/terabiome/homonculus/internal/config"
@@ -15,11 +19,18 @@ import (
 	"github.com/terabiome/homonculus/internal/provisioner"
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/logger"
+	"github.com/terabiome/homonculus/pkg/telemetry"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"github.com/urfave/cli/v2"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("configuration error", slog.String("error", err.Error()))
@@ -31,6 +42,27 @@ func main() {
 		slog.String("log_level", cfg.LogLevel),
 		slog.String("log_format", cfg.LogFormat),
 	)
+
+	tel, err := telemetry.Initialize("homonculus")
+	if err != nil {
+		log.Error("failed to initialize telemetry", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		log.Info("shutting down telemetry")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := tel.Shutdown(shutdownCtx); err != nil {
+			log.Error("failed to shutdown telemetry", slog.String("error", err.Error()))
+		}
+	}()
+	log.Info("telemetry initialized")
+
+	go func() {
+		sig := <-sigChan
+		log.Info("received shutdown signal", slog.String("signal", sig.String()))
+		cancel()
+	}()
 
 	app := &cli.App{
 		Name:                 "homonculus",
@@ -51,13 +83,13 @@ func main() {
 					{
 						Name:  "create",
 						Usage: "Create virtual machine(s)",
-						Action: func(ctx *cli.Context) error {
+						Action: func(cliCtx *cli.Context) error {
 							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
 
-							filepath := ctx.Args().First()
+							filepath := cliCtx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
 							}
@@ -75,7 +107,7 @@ func main() {
 
 							log.Info("creating VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
-							if err := provisionerService.CreateCluster(clusterRequest); err != nil {
+							if err := provisionerService.CreateCluster(ctx, clusterRequest); err != nil {
 								return fmt.Errorf("unable to create virtual machines from template data: %w", err)
 							}
 
@@ -86,13 +118,13 @@ func main() {
 					{
 						Name:  "delete",
 						Usage: "Delete virtual machine(s)",
-						Action: func(ctx *cli.Context) error {
+						Action: func(cliCtx *cli.Context) error {
 							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
 
-							filepath := ctx.Args().First()
+							filepath := cliCtx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
 							}
@@ -110,7 +142,7 @@ func main() {
 
 							log.Info("deleting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
-							if err := provisionerService.DeleteCluster(clusterRequest); err != nil {
+							if err := provisionerService.DeleteCluster(ctx, clusterRequest); err != nil {
 								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
 							}
 
@@ -121,13 +153,13 @@ func main() {
 					{
 						Name:  "clone",
 						Usage: "Clone virtual machine(s)",
-						Action: func(ctx *cli.Context) error {
+						Action: func(cliCtx *cli.Context) error {
 							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
 
-							filepath := ctx.Args().First()
+							filepath := cliCtx.Args().First()
 							if filepath == "" {
 								return errors.New("empty file path to virtualmachine config")
 							}
@@ -148,7 +180,7 @@ func main() {
 								slog.Int("count", len(clusterRequest.TargetVirtualMachines)),
 							)
 
-							if err := provisionerService.CloneCluster(clusterRequest); err != nil {
+							if err := provisionerService.CloneCluster(ctx, clusterRequest); err != nil {
 								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
 							}
 

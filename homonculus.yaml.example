@@ -1,0 +1,22 @@
+# Homonculus Configuration File
+# Place this file in:
+#   - ./homonculus.yaml (current directory)
+#   - ~/.config/homonculus/homonculus.yaml (user config)
+#   - /etc/homonculus/homonculus.yaml (system-wide)
+#
+# Priority: ENV vars > Config file > Defaults
+
+# Logging configuration
+log_level: info  # debug, info, warn, error
+log_format: text # text, json
+
+# Template paths
+libvirt_template: ./templates/libvirt/domain.xml.tpl
+cloudinit_user_data_template: ./templates/cloudinit/user-data.tpl
+cloudinit_meta_data_template: ./templates/cloudinit/meta-data.tpl
+cloudinit_network_config_template: ./templates/cloudinit/network-config.tpl
+
+# Optional: Leave empty to skip
+# cloudinit_meta_data_template: ""
+# cloudinit_network_config_template: ""
+

@@ -136,6 +136,24 @@ func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
 	return domain, nil
 }
 
+func (svc *Service) CheckVirtualMachineExistence(name string) (bool, error) {
+	conn, err := libvirt.NewConnect("qemu:///system")
+	if err != nil {
+		return false, fmt.Errorf("could not connect to hypervisor: %w", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.LookupDomainByName(name)
+	if err != nil {
+		if err.(libvirt.Error).Code == libvirt.ERR_NO_DOMAIN {
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking if VM exists: %w", err)
+	}
+
+	return true, nil
+}
+
 func (svc *Service) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error) {
 	domainXML := libvirtxml.Domain{}
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)

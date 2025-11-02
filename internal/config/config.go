@@ -17,6 +17,18 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	viper.SetConfigName("homonculus")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("$HOME/.config/homonculus")
+	viper.AddConfigPath("/etc/homonculus")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("error reading config file: %w", err)
+		}
+	}
+
 	viper.SetDefault("libvirt_template", "./templates/libvirt/domain.xml.tpl")
 	viper.SetDefault("cloudinit_user_data_template", "./templates/cloudinit/user-data.tpl")
 	viper.SetDefault("cloudinit_meta_data_template", "./templates/cloudinit/meta-data.tpl")

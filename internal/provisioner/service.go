@@ -1,15 +1,20 @@
 package provisioner
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/cloudinit"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/internal/disk"
 	"github.com/terabiome/homonculus/internal/libvirt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Service struct {
@@ -17,6 +22,12 @@ type Service struct {
 	cloudinitService *cloudinit.Service
 	libvirtService   *libvirt.Service
 	logger           *slog.Logger
+
+	vmDeleteCounter  metric.Int64Counter
+	vmCloneCounter   metric.Int64Counter
+	vmCreateDuration metric.Float64Histogram
+	vmDeleteDuration metric.Float64Histogram
+	vmCloneDuration  metric.Float64Histogram
 }
 
 func NewService(
@@ -25,19 +36,85 @@ func NewService(
 	libvirtService *libvirt.Service,
 	logger *slog.Logger,
 ) *Service {
+	meter := otel.Meter("homonculus/provisioner")
+
+	vmDeleteCounter, _ := meter.Int64Counter(
+		"homonculus.vm.delete",
+		metric.WithDescription("Number of VM delete operations"),
+		metric.WithUnit("{operation}"),
+	)
+
+	vmCloneCounter, _ := meter.Int64Counter(
+		"homonculus.vm.clone",
+		metric.WithDescription("Number of VM clone operations"),
+		metric.WithUnit("{operation}"),
+	)
+
+	vmCreateDuration, _ := meter.Float64Histogram(
+		"homonculus.vm.create.duration",
+		metric.WithDescription("Duration of VM create operations"),
+		metric.WithUnit("s"),
+	)
+
+	vmDeleteDuration, _ := meter.Float64Histogram(
+		"homonculus.vm.delete.duration",
+		metric.WithDescription("Duration of VM delete operations"),
+		metric.WithUnit("s"),
+	)
+
+	vmCloneDuration, _ := meter.Float64Histogram(
+		"homonculus.vm.clone.duration",
+		metric.WithDescription("Duration of VM clone operations"),
+		metric.WithUnit("s"),
+	)
+
 	return &Service{
 		diskService:      diskService,
 		cloudinitService: cloudinitService,
 		libvirtService:   libvirtService,
 		logger:           logger.With(slog.String("service", "provisioner")),
+		vmDeleteCounter:  vmDeleteCounter,
+		vmCloneCounter:   vmCloneCounter,
+		vmCreateDuration: vmCreateDuration,
+		vmDeleteDuration: vmDeleteDuration,
+		vmCloneDuration:  vmCloneDuration,
 	}
 }
 
-func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterRequest) error {
+func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVirtualMachineClusterRequest) error {
+	tracer := otel.Tracer("homonculus/provisioner")
+	ctx, span := tracer.Start(ctx, "CreateCluster")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("vm.count", len(request.VirtualMachines)))
+
 	var failedVMs []string
 
 	for _, virtualMachine := range request.VirtualMachines {
+		startTime := time.Now()
+		_, vmSpan := tracer.Start(ctx, "CreateVM")
+		vmSpan.SetAttributes(attribute.String("vm.name", virtualMachine.Name))
+
 		virtualMachineUUID := uuid.New()
+
+		exists, err := s.libvirtService.CheckVirtualMachineExistence(virtualMachine.Name)
+		if err != nil {
+			s.logger.Error("failed to check if VM exists",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("error", err.Error()),
+			)
+			vmSpan.End()
+			failedVMs = append(failedVMs, virtualMachine.Name)
+			continue
+		}
+
+		if exists {
+			s.logger.Warn("VM already exists, skipping",
+				slog.String("vm", virtualMachine.Name),
+			)
+			vmSpan.End()
+			continue
+		}
 
 		s.logger.Info("creating VM disk",
 			slog.String("vm", virtualMachine.Name),
@@ -52,6 +129,7 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
+			vmSpan.End()
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
@@ -69,6 +147,7 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 						slog.String("error", err.Error()),
 					)
 				}
+				vmSpan.End()
 				failedVMs = append(failedVMs, virtualMachine.Name)
 				continue
 			}
@@ -96,6 +175,7 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 					)
 				}
 			}
+			vmSpan.End()
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
@@ -104,6 +184,10 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 			slog.String("vm", virtualMachine.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
 		)
+		s.vmCreateDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
+			attribute.String("vm.name", virtualMachine.Name),
+		))
+		vmSpan.End()
 	}
 
 	if len(failedVMs) > 0 {
@@ -112,10 +196,11 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 	return nil
 }
 
-func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterRequest) error {
+func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVirtualMachineClusterRequest) error {
 	var failedVMs []string
 
 	for _, virtualMachine := range request.VirtualMachines {
+		startTime := time.Now()
 		s.logger.Info("deleting VM", slog.String("vm", virtualMachine.Name))
 
 		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(virtualMachine); err != nil {
@@ -124,11 +209,20 @@ func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterReq
 				slog.String("uuid", vmUUID),
 				slog.String("error", err.Error()),
 			)
+			s.vmDeleteCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("status", "failed"),
+			))
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
 
 		s.logger.Info("successfully deleted VM", slog.String("vm", virtualMachine.Name))
+		s.vmDeleteCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("status", "success"),
+		))
+		s.vmDeleteDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
+			attribute.String("vm.name", virtualMachine.Name),
+		))
 	}
 
 	if len(failedVMs) > 0 {
@@ -137,7 +231,7 @@ func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterReq
 	return nil
 }
 
-func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterRequest) error {
+func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtualMachineClusterRequest) error {
 	s.logger.Info("finding base VM for cloning", slog.String("base_vm", request.BaseVirtualMachine.Name))
 
 	baseDomain, err := s.libvirtService.FindVirtualMachine(request.BaseVirtualMachine.Name)
@@ -171,6 +265,7 @@ func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterReque
 	var failedVMs []string
 
 	for _, virtualMachine := range request.TargetVirtualMachines {
+		startTime := time.Now()
 		virtualMachineUUID := uuid.New()
 
 		s.logger.Info("cloning VM",
@@ -191,6 +286,10 @@ func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterReque
 					slog.String("error", err.Error()),
 				)
 			}
+			s.vmCloneCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("status", "failed"),
+				attribute.String("reason", "disk_clone_error"),
+			))
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
@@ -203,6 +302,10 @@ func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterReque
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
+			s.vmCloneCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("status", "failed"),
+				attribute.String("reason", "vm_clone_error"),
+			))
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
@@ -211,6 +314,12 @@ func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterReque
 			slog.String("vm", virtualMachine.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
 		)
+		s.vmCloneCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("status", "success"),
+		))
+		s.vmCloneDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
+			attribute.String("vm.name", virtualMachine.Name),
+		))
 	}
 
 	if len(failedVMs) > 0 {
