@@ -12,6 +12,7 @@ import (
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/internal/disk"
 	"github.com/terabiome/homonculus/internal/libvirt"
+	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -21,6 +22,7 @@ type Service struct {
 	diskService      *disk.Service
 	cloudinitService *cloudinit.Service
 	libvirtService   *libvirt.Service
+	connManager      *pkglibvirt.ConnectionManager
 	logger           *slog.Logger
 
 	vmDeleteCounter  metric.Int64Counter
@@ -34,6 +36,7 @@ func NewService(
 	diskService *disk.Service,
 	cloudinitService *cloudinit.Service,
 	libvirtService *libvirt.Service,
+	connManager *pkglibvirt.ConnectionManager,
 	logger *slog.Logger,
 ) *Service {
 	meter := otel.Meter("homonculus/provisioner")
@@ -87,6 +90,7 @@ func NewService(
 		diskService:      diskService,
 		cloudinitService: cloudinitService,
 		libvirtService:   libvirtService,
+		connManager:      connManager,
 		logger:           logger.With(slog.String("service", "provisioner")),
 		vmDeleteCounter:  vmDeleteCounter,
 		vmCloneCounter:   vmCloneCounter,
@@ -103,6 +107,12 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 
 	span.SetAttributes(attribute.Int("vm.count", len(request.VirtualMachines)))
 
+	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	if err != nil {
+		return fmt.Errorf("failed to get hypervisor connection: %w", err)
+	}
+	defer unlock()
+
 	var failedVMs []string
 
 	for _, virtualMachine := range request.VirtualMachines {
@@ -111,6 +121,10 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 		vmSpan.SetAttributes(attribute.String("vm.name", virtualMachine.Name))
 
 		virtualMachineUUID := uuid.New()
+
+		virtualMachine.Conn = conn
+		virtualMachine.Executor = executor
+		virtualMachine.URI = "qemu:///system"
 
 		exists, err := s.libvirtService.CheckVirtualMachineExistence(virtualMachine.Name)
 		if err != nil {
@@ -138,7 +152,7 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 			slog.Int64("size_gb", virtualMachine.DiskSizeGB),
 		)
 
-		if err := s.diskService.CreateDisk(virtualMachine.DiskPath, virtualMachine.BaseImagePath, virtualMachine.DiskSizeGB); err != nil {
+		if err := s.diskService.CreateDisk(ctx, virtualMachine); err != nil {
 			s.logger.Error("failed to create disk",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
@@ -150,7 +164,7 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 		}
 
 		if virtualMachine.CloudInitISOPath != "" {
-			if err := s.cloudinitService.CreateISO(virtualMachine, virtualMachineUUID); err != nil {
+			if err := s.cloudinitService.CreateISO(ctx, virtualMachine, virtualMachineUUID); err != nil {
 				s.logger.Error("failed to create cloud-init ISO",
 					slog.String("vm", virtualMachine.Name),
 					slog.String("uuid", virtualMachineUUID.String()),
@@ -214,11 +228,21 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 }
 
 func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVirtualMachineClusterRequest) error {
+	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	if err != nil {
+		return fmt.Errorf("failed to get hypervisor connection: %w", err)
+	}
+	defer unlock()
+
 	var failedVMs []string
 
 	for _, virtualMachine := range request.VirtualMachines {
 		startTime := time.Now()
 		s.logger.Info("deleting VM", slog.String("vm", virtualMachine.Name))
+
+		virtualMachine.Conn = conn
+		virtualMachine.Executor = executor
+		virtualMachine.URI = "qemu:///system"
 
 		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(virtualMachine); err != nil {
 			s.logger.Error("failed to delete VM",
@@ -255,6 +279,12 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 }
 
 func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtualMachineClusterRequest) error {
+	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	if err != nil {
+		return fmt.Errorf("failed to get hypervisor connection: %w", err)
+	}
+	defer unlock()
+
 	s.logger.Info("finding base VM for cloning", slog.String("base_vm", request.BaseVirtualMachine.Name))
 
 	baseDomain, err := s.libvirtService.FindVirtualMachine(request.BaseVirtualMachine.Name)
@@ -291,13 +321,19 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 		startTime := time.Now()
 		virtualMachineUUID := uuid.New()
 
+		virtualMachine.Conn = conn
+		virtualMachine.Executor = executor
+		virtualMachine.URI = "qemu:///system"
+
 		s.logger.Info("cloning VM",
 			slog.String("vm", virtualMachine.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
 			slog.String("from", request.BaseVirtualMachine.Name),
 		)
 
-		if err := s.diskService.CreateDisk(virtualMachine.DiskPath, baseImagePath, virtualMachine.DiskSizeGB); err != nil {
+		virtualMachine.BaseImagePath = baseImagePath
+
+		if err := s.diskService.CreateDiskForClone(ctx, virtualMachine); err != nil {
 			s.logger.Error("failed to clone disk",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),

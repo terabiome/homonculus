@@ -12,6 +12,8 @@ type CreateVirtualMachineClusterRequest struct {
 }
 
 type CreateVirtualMachineRequest struct {
+	HypervisorContext
+
 	Name                   string                   `json:"name"`
 	VCPU                   int                      `json:"vcpu"`
 	MemoryMB               int64                    `json:"memory_mb"`
@@ -24,6 +26,8 @@ type CreateVirtualMachineRequest struct {
 	UserConfigs            []UserConfig             `json:"user_configs"`
 }
 type DeleteVirtualMachineRequest struct {
+	HypervisorContext
+
 	Name string `json:"name"`
 }
 
@@ -35,6 +39,8 @@ type BaseVirtualMachineCloneInfo struct {
 	Name string `json:"name"`
 }
 type TargetVirtualMachineCloneInfo struct {
+	HypervisorContext
+
 	Name          string `json:"name"`
 	VCPU          int    `json:"vcpu"`
 	MemoryMB      int64  `json:"memory_mb"`

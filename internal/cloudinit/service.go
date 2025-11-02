@@ -1,15 +1,15 @@
 package cloudinit
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/pkg/constants"
+	"github.com/terabiome/homonculus/pkg/executor"
 	"github.com/terabiome/homonculus/pkg/templator"
 )
 
@@ -25,12 +25,8 @@ func NewService(engine *templator.Engine, logger *slog.Logger) *Service {
 	}
 }
 
-func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, instanceID uuid.UUID) error {
+func (svc *Service) CreateISO(ctx context.Context, vmRequest contracts.CreateVirtualMachineRequest, instanceID uuid.UUID) error {
 	dirPath := filepath.Dir(vmRequest.CloudInitISOPath)
-
-	if err := os.MkdirAll(dirPath, 0o755); err != nil {
-		return fmt.Errorf("could not create directory for cloud-init ISO: %w", err)
-	}
 
 	userDataPath := filepath.Join(dirPath, "user-data")
 	if err := svc.renderUserData(userDataPath, vmRequest); err != nil {
@@ -61,10 +57,10 @@ func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, i
 	args := []string{"-output", vmRequest.CloudInitISOPath, "-volid", "cidata", "-joliet", "-r"}
 	args = append(args, isoFiles...)
 
-	cmd := exec.Command("mkisofs", args...)
-	output, err := cmd.CombinedOutput()
+	result, err := executor.RunAndCapture(ctx, vmRequest.Executor, "mkisofs", args...)
 	if err != nil {
-		return fmt.Errorf("mkisofs failed: %w - %s", err, string(output))
+		return fmt.Errorf("mkisofs failed: %w\nstdout: %s\nstderr: %s",
+			err, result.Stdout, result.Stderr)
 	}
 
 	svc.logger.Info("created cloud-init ISO",

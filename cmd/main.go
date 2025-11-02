@@ -18,6 +18,7 @@ import (
 	"github.com/terabiome/homonculus/internal/libvirt"
 	"github.com/terabiome/homonculus/internal/provisioner"
 	"github.com/terabiome/homonculus/pkg/constants"
+	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"github.com/terabiome/homonculus/pkg/logger"
 	"github.com/terabiome/homonculus/pkg/telemetry"
 	"github.com/terabiome/homonculus/pkg/templator"
@@ -226,10 +227,17 @@ func initProvisioner(cfg *config.Config, log *slog.Logger) (*provisioner.Service
 
 	log.Debug("templates loaded successfully")
 
+	connManager, err := pkglibvirt.NewConnectionManager(log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize connection manager: %w", err)
+	}
+	log.Info("connection manager initialized")
+
 	return provisioner.NewService(
 		disk.NewService(log),
 		cloudinit.NewService(engine, log),
 		libvirt.NewService(engine, log),
+		connManager,
 		log,
 	), nil
 }
