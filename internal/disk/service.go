@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/terabiome/homonculus/internal/contracts"
-	"github.com/terabiome/homonculus/pkg/executor"
+	"github.com/terabiome/homonculus/pkg/executor/qemuimg"
 )
 
 type Service struct {
@@ -36,19 +36,14 @@ func (s *Service) CreateDisk(ctx context.Context, hypervisor contracts.Hyperviso
 		return fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
 	}
 
-	args := []string{
-		"create",
-		"-b", req.BaseImagePath,
-		"-F", backingFileFormat,
-		"-f", "qcow2",
-		req.DiskPath,
-		fmt.Sprintf("%dG", req.DiskSizeGB),
-	}
-
-	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "qemu-img", args...)
+	err := qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
+		BackingFile:       req.BaseImagePath,
+		BackingFileFormat: backingFileFormat,
+		OutputPath:        req.DiskPath,
+		SizeGB:            req.DiskSizeGB,
+	})
 	if err != nil {
-		return fmt.Errorf("qemu-img failed: %w\nstdout: %s\nstderr: %s",
-			err, result.Stdout, result.Stderr)
+		return err
 	}
 
 	s.logger.Info("created qcow2 disk",
@@ -74,19 +69,14 @@ func (s *Service) CreateDiskForClone(ctx context.Context, hypervisor contracts.H
 		return fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
 	}
 
-	args := []string{
-		"create",
-		"-b", req.BaseImagePath,
-		"-F", backingFileFormat,
-		"-f", "qcow2",
-		req.DiskPath,
-		fmt.Sprintf("%dG", req.DiskSizeGB),
-	}
-
-	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "qemu-img", args...)
+	err := qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
+		BackingFile:       req.BaseImagePath,
+		BackingFileFormat: backingFileFormat,
+		OutputPath:        req.DiskPath,
+		SizeGB:            req.DiskSizeGB,
+	})
 	if err != nil {
-		return fmt.Errorf("qemu-img failed: %w\nstdout: %s\nstderr: %s",
-			err, result.Stdout, result.Stderr)
+		return err
 	}
 
 	s.logger.Info("created qcow2 disk for clone",

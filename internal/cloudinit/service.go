@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/pkg/constants"
-	"github.com/terabiome/homonculus/pkg/executor"
+	"github.com/terabiome/homonculus/pkg/executor/mkisofs"
 	"github.com/terabiome/homonculus/pkg/templator"
 )
 
@@ -54,13 +54,13 @@ func (svc *Service) CreateISO(ctx context.Context, hypervisor contracts.Hypervis
 		svc.logger.Debug("rendered network-config", slog.String("vm", vmRequest.Name))
 	}
 
-	args := []string{"-output", vmRequest.CloudInitISOPath, "-volid", "cidata", "-joliet", "-r"}
-	args = append(args, isoFiles...)
-
-	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "mkisofs", args...)
+	err := mkisofs.CreateISO(ctx, hypervisor.Executor, mkisofs.ISOOptions{
+		OutputPath: vmRequest.CloudInitISOPath,
+		VolumeID:   "cidata",
+		Files:      isoFiles,
+	})
 	if err != nil {
-		return fmt.Errorf("mkisofs failed: %w\nstdout: %s\nstderr: %s",
-			err, result.Stdout, result.Stderr)
+		return err
 	}
 
 	svc.logger.Info("created cloud-init ISO",

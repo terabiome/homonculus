@@ -11,7 +11,7 @@ import (
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/internal/disk"
 	"github.com/terabiome/homonculus/internal/libvirt"
-	"github.com/terabiome/homonculus/pkg/executor"
+	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -172,12 +172,10 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 					slog.String("uuid", virtualMachineUUID.String()),
 					slog.String("error", err.Error()),
 				)
-				result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
-				if cleanupErr != nil {
+				if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
 					s.logger.Warn("failed to cleanup disk",
 						slog.String("path", virtualMachine.DiskPath),
-						slog.String("error", cleanupErr.Error()),
-						slog.String("stderr", result.Stderr),
+						slog.String("error", err.Error()),
 					)
 				}
 				vmSpan.End()
@@ -194,21 +192,17 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
-			if cleanupErr != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
 					slog.String("path", virtualMachine.DiskPath),
-					slog.String("error", cleanupErr.Error()),
-					slog.String("stderr", result.Stderr),
+					slog.String("error", err.Error()),
 				)
 			}
 			if virtualMachine.CloudInitISOPath != "" {
-				result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.CloudInitISOPath)
-				if cleanupErr != nil {
+				if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.CloudInitISOPath); err != nil {
 					s.logger.Warn("failed to cleanup cloud-init ISO",
 						slog.String("path", virtualMachine.CloudInitISOPath),
-						slog.String("error", cleanupErr.Error()),
-						slog.String("stderr", result.Stderr),
+						slog.String("error", err.Error()),
 					)
 				}
 			}
@@ -351,12 +345,10 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
-			if cleanupErr != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
 					slog.String("path", virtualMachine.DiskPath),
-					slog.String("error", cleanupErr.Error()),
-					slog.String("stderr", result.Stderr),
+					slog.String("error", err.Error()),
 				)
 			}
 			if s.vmCloneCounter != nil {
@@ -375,12 +367,10 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
-			if cleanupErr != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
 					slog.String("path", virtualMachine.DiskPath),
-					slog.String("error", cleanupErr.Error()),
-					slog.String("stderr", result.Stderr),
+					slog.String("error", err.Error()),
 				)
 			}
 			if s.vmCloneCounter != nil {

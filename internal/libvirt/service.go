@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/pkg/constants"
-	"github.com/terabiome/homonculus/pkg/executor"
+	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"libvirt.org/go/libvirt"
 	"libvirt.org/go/libvirtxml"
@@ -86,14 +86,12 @@ func (svc *Service) DeleteVirtualMachine(ctx context.Context, hypervisor contrac
 			slog.String("type", disk.Driver.Type),
 			slog.String("path", disk.Source.File.File),
 		)
-
-		result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", disk.Source.File.File)
-		if err != nil {
+		
+		if err := fileops.RemoveFile(ctx, hypervisor.Executor, disk.Source.File.File); err != nil {
 			svc.logger.Warn("failed to delete disk",
 				slog.String("vm", request.Name),
 				slog.String("path", disk.Source.File.File),
 				slog.String("error", err.Error()),
-				slog.String("stderr", result.Stderr),
 			)
 		}
 	}
