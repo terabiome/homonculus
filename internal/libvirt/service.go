@@ -2,7 +2,7 @@ package libvirt
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
@@ -15,10 +15,14 @@ import (
 
 type Service struct {
 	engine *templator.Engine
+	logger *slog.Logger
 }
 
-func NewService(engine *templator.Engine) *Service {
-	return &Service{engine: engine}
+func NewService(engine *templator.Engine, logger *slog.Logger) *Service {
+	return &Service{
+		engine: engine,
+		logger: logger.With(slog.String("service", "libvirt")),
+	}
 }
 
 func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineRequest, virtualMachineUUID uuid.UUID) error {
@@ -36,25 +40,25 @@ func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineR
 	if err != nil {
 		return fmt.Errorf("could not create Libvirt XML in memory: %w", err)
 	}
-	log.Println("created Libvirt XML in memory")
+	svc.logger.Debug("rendered libvirt XML", slog.String("vm", request.Name))
 
 	conn, err := libvirt.NewConnect("qemu:///system")
 	if err != nil {
 		return fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
 	defer conn.Close()
-	log.Println("connected to hypervisor")
+	svc.logger.Debug("connected to hypervisor")
 
 	domain, err := conn.DomainDefineXML(string(bytes))
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
-	log.Println("defined VM from Libvirt XML")
+	svc.logger.Debug("defined VM in libvirt", slog.String("vm", request.Name))
 
 	if err = domain.Create(); err != nil {
 		return fmt.Errorf("could not start VM from Libvirt XML: %w", err)
 	}
-	log.Println("started VM from Libvirt XML")
+	svc.logger.Info("started VM", slog.String("vm", request.Name))
 
 	return nil
 }
@@ -65,26 +69,24 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 		return "", fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
 	defer conn.Close()
-	log.Println("connected to hypervisor")
+	svc.logger.Debug("connected to hypervisor")
 
 	domain, err := conn.LookupDomainByName(request.Name)
 	if err != nil {
 		return "", fmt.Errorf("could not look up VM by name: %w", err)
 	}
-	log.Println("looked up VM by name")
+	svc.logger.Debug("found VM", slog.String("vm", request.Name))
 
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
 		return "", fmt.Errorf("could not read domain XML: %w", err)
 	}
-	log.Println("read domain XML")
 
 	domainXML := libvirtxml.Domain{}
 	err = domainXML.Unmarshal(domainXMLString)
 	if err != nil {
 		return "", fmt.Errorf("could not parse domain XML: %w", err)
 	}
-	log.Println("parsed domain XML")
 
 	vmUUID, err := domain.GetUUIDString()
 	if err != nil {
@@ -92,10 +94,10 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 	}
 
 	for _, disk := range domainXML.Devices.Disks {
-		log.Printf("deleting %v disk for VM %s (uuid = %v)...",
-			disk.Driver.Type,
-			request.Name,
-			vmUUID,
+		svc.logger.Debug("deleting disk",
+			slog.String("vm", request.Name),
+			slog.String("type", disk.Driver.Type),
+			slog.String("path", disk.Source.File.File),
 		)
 		if err := os.Remove(disk.Source.File.File); err != nil {
 			return "", fmt.Errorf("could not delete disk in VM: %w", err)
@@ -106,13 +108,13 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 		if err = domain.Destroy(); err != nil {
 			return "", fmt.Errorf("could not destroy VM: %w", err)
 		}
-		log.Println("destroyed VM")
+		svc.logger.Debug("destroyed running VM", slog.String("vm", request.Name))
 	}
 
 	if err = domain.Undefine(); err != nil {
 		return "", fmt.Errorf("could not undefine VM: %w", err)
 	}
-	log.Println("undefined VM")
+	svc.logger.Info("undefined VM from libvirt", slog.String("vm", request.Name))
 
 	return vmUUID, nil
 }
@@ -123,13 +125,13 @@ func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
 		return nil, fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
 	defer conn.Close()
-	log.Println("connected to hypervisor")
+	svc.logger.Debug("connected to hypervisor")
 
 	domain, err := conn.LookupDomainByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("could not look up VM by name: %w", err)
 	}
-	log.Println("looked up VM by name")
+	svc.logger.Debug("found VM", slog.String("vm", name))
 
 	return domain, nil
 }
@@ -140,13 +142,13 @@ func (svc *Service) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, err
 	if err != nil {
 		return domainXML, fmt.Errorf("could not read domain XML: %w", err)
 	}
-	log.Println("read domain XML")
+	svc.logger.Debug("read domain XML")
 
 	err = domainXML.Unmarshal(domainXMLString)
 	if err != nil {
 		return domainXML, fmt.Errorf("could not parse domain XML: %w", err)
 	}
-	log.Println("parsed domain XML")
+	svc.logger.Debug("parsed domain XML")
 	return domainXML, nil
 }
 
@@ -156,7 +158,7 @@ func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetI
 		return fmt.Errorf("could not connect to hypervisor: %w", err)
 	}
 	defer conn.Close()
-	log.Println("connected to hypervisor")
+	svc.logger.Debug("connected to hypervisor")
 
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
@@ -183,12 +185,12 @@ func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetI
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
-	log.Println("defined VM from Libvirt XML")
+	svc.logger.Debug("defined cloned VM in libvirt", slog.String("vm", targetInfo.Name))
 
 	if err = domain.Create(); err != nil {
 		return fmt.Errorf("could not start VM from Libvirt XML: %w", err)
 	}
-	log.Println("started VM from Libvirt XML")
+	svc.logger.Info("started cloned VM", slog.String("vm", targetInfo.Name))
 
 	return nil
 }

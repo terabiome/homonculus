@@ -2,6 +2,7 @@ package cloudinit
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,10 +15,14 @@ import (
 
 type Service struct {
 	engine *templator.Engine
+	logger *slog.Logger
 }
 
-func NewService(engine *templator.Engine) *Service {
-	return &Service{engine: engine}
+func NewService(engine *templator.Engine, logger *slog.Logger) *Service {
+	return &Service{
+		engine: engine,
+		logger: logger.With(slog.String("service", "cloudinit")),
+	}
 }
 
 func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, instanceID uuid.UUID) error {
@@ -31,6 +36,7 @@ func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, i
 	if err := svc.renderUserData(userDataPath, vmRequest); err != nil {
 		return fmt.Errorf("failed to render user-data: %w", err)
 	}
+	svc.logger.Debug("rendered user-data", slog.String("vm", vmRequest.Name))
 
 	isoFiles := []string{userDataPath}
 
@@ -40,6 +46,7 @@ func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, i
 			return fmt.Errorf("failed to render meta-data: %w", err)
 		}
 		isoFiles = append(isoFiles, metaDataPath)
+		svc.logger.Debug("rendered meta-data", slog.String("vm", vmRequest.Name))
 	}
 
 	if svc.engine.HasTemplate(constants.TemplateCloudInitNetworkConfig) {
@@ -48,6 +55,7 @@ func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, i
 			return fmt.Errorf("failed to render network-config: %w", err)
 		}
 		isoFiles = append(isoFiles, networkConfigPath)
+		svc.logger.Debug("rendered network-config", slog.String("vm", vmRequest.Name))
 	}
 
 	args := []string{"-output", vmRequest.CloudInitISOPath, "-volid", "cidata", "-joliet", "-r"}
@@ -58,6 +66,12 @@ func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest, i
 	if err != nil {
 		return fmt.Errorf("mkisofs failed: %w - %s", err, string(output))
 	}
+
+	svc.logger.Info("created cloud-init ISO",
+		slog.String("vm", vmRequest.Name),
+		slog.String("path", vmRequest.CloudInitISOPath),
+		slog.Int("files", len(isoFiles)),
+	)
 
 	return nil
 }

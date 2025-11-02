@@ -2,7 +2,7 @@ package disk
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -10,14 +10,22 @@ import (
 	"strings"
 )
 
-type Service struct{}
+type Service struct {
+	logger *slog.Logger
+}
 
-func NewService() *Service {
-	return &Service{}
+func NewService(logger *slog.Logger) *Service {
+	return &Service{
+		logger: logger.With(slog.String("service", "disk")),
+	}
 }
 
 func (s *Service) CreateDisk(diskpath, baseImagePath string, sizeGB int64) error {
-	log.Printf("Running qemu-img create for %s with base image %s ...", diskpath, baseImagePath)
+	s.logger.Debug("creating qcow2 disk",
+		slog.String("path", diskpath),
+		slog.String("base", baseImagePath),
+		slog.Int64("size_gb", sizeGB),
+	)
 
 	dir := filepath.Dir(diskpath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -44,5 +52,11 @@ func (s *Service) CreateDisk(diskpath, baseImagePath string, sizeGB int64) error
 	if err != nil {
 		return fmt.Errorf("qemu-img failed: %w - %s", err, string(output))
 	}
+
+	s.logger.Info("created qcow2 disk",
+		slog.String("path", diskpath),
+		slog.Int64("size_gb", sizeGB),
+	)
+
 	return nil
 }

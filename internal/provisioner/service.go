@@ -2,7 +2,7 @@ package provisioner
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
@@ -13,13 +13,24 @@ import (
 )
 
 type Service struct {
-	diskSvc    *disk.Service
-	ciSvc      *cloudinit.Service
-	libvirtSvc *libvirt.Service
+	diskService      *disk.Service
+	cloudinitService *cloudinit.Service
+	libvirtService   *libvirt.Service
+	logger           *slog.Logger
 }
 
-func NewService(d *disk.Service, c *cloudinit.Service, l *libvirt.Service) *Service {
-	return &Service{diskSvc: d, ciSvc: c, libvirtSvc: l}
+func NewService(
+	diskService *disk.Service,
+	cloudinitService *cloudinit.Service,
+	libvirtService *libvirt.Service,
+	logger *slog.Logger,
+) *Service {
+	return &Service{
+		diskService:      diskService,
+		cloudinitService: cloudinitService,
+		libvirtService:   libvirtService,
+		logger:           logger.With(slog.String("service", "provisioner")),
+	}
 }
 
 func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterRequest) error {
@@ -28,39 +39,71 @@ func (s *Service) CreateCluster(request contracts.CreateVirtualMachineClusterReq
 	for _, virtualMachine := range request.VirtualMachines {
 		virtualMachineUUID := uuid.New()
 
-		log.Printf("creating QCOW2 disk for VM %s (uuid = %v) at path %s (%d GB)...",
-			virtualMachine.Name,
-			virtualMachineUUID,
-			virtualMachine.DiskPath,
-			virtualMachine.DiskSizeGB,
+		s.logger.Info("creating VM disk",
+			slog.String("vm", virtualMachine.Name),
+			slog.String("uuid", virtualMachineUUID.String()),
+			slog.String("path", virtualMachine.DiskPath),
+			slog.Int64("size_gb", virtualMachine.DiskSizeGB),
 		)
 
-		if err := s.diskSvc.CreateDisk(virtualMachine.DiskPath, virtualMachine.BaseImagePath, virtualMachine.DiskSizeGB); err != nil {
-			log.Printf("unable to create QCOW2 disk for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
+		if err := s.diskService.CreateDisk(virtualMachine.DiskPath, virtualMachine.BaseImagePath, virtualMachine.DiskSizeGB); err != nil {
+			s.logger.Error("failed to create disk",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("uuid", virtualMachineUUID.String()),
+				slog.String("error", err.Error()),
+			)
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
 
 		if virtualMachine.CloudInitISOPath != "" {
-			if err := s.ciSvc.CreateISO(virtualMachine, virtualMachineUUID); err != nil {
-				log.Printf("unable to create cloud-init ISO for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
-				log.Printf("cleaning up disk: err = %v", os.Remove(virtualMachine.DiskPath))
+			if err := s.cloudinitService.CreateISO(virtualMachine, virtualMachineUUID); err != nil {
+				s.logger.Error("failed to create cloud-init ISO",
+					slog.String("vm", virtualMachine.Name),
+					slog.String("uuid", virtualMachineUUID.String()),
+					slog.String("error", err.Error()),
+				)
+				if err := os.Remove(virtualMachine.DiskPath); err != nil {
+					s.logger.Warn("failed to cleanup disk",
+						slog.String("path", virtualMachine.DiskPath),
+						slog.String("error", err.Error()),
+					)
+				}
 				failedVMs = append(failedVMs, virtualMachine.Name)
 				continue
 			}
 		} else {
-			log.Printf("skipping cloud-init part due to empty path")
+			s.logger.Debug("skipping cloud-init ISO creation", slog.String("vm", virtualMachine.Name))
 		}
 
-		if err := s.libvirtSvc.CreateVirtualMachine(virtualMachine, virtualMachineUUID); err != nil {
-			log.Printf("unable to create VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
-			log.Printf("cleaning up disk: err = %v", os.Remove(virtualMachine.DiskPath))
+		if err := s.libvirtService.CreateVirtualMachine(virtualMachine, virtualMachineUUID); err != nil {
+			s.logger.Error("failed to create VM",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("uuid", virtualMachineUUID.String()),
+				slog.String("error", err.Error()),
+			)
+			if err := os.Remove(virtualMachine.DiskPath); err != nil {
+				s.logger.Warn("failed to cleanup disk",
+					slog.String("path", virtualMachine.DiskPath),
+					slog.String("error", err.Error()),
+				)
+			}
 			if virtualMachine.CloudInitISOPath != "" {
-				log.Printf("cleaning up cloud-init ISO: err = %v", os.Remove(virtualMachine.CloudInitISOPath))
+				if err := os.Remove(virtualMachine.CloudInitISOPath); err != nil {
+					s.logger.Warn("failed to cleanup cloud-init ISO",
+						slog.String("path", virtualMachine.CloudInitISOPath),
+						slog.String("error", err.Error()),
+					)
+				}
 			}
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
+
+		s.logger.Info("successfully created VM",
+			slog.String("vm", virtualMachine.Name),
+			slog.String("uuid", virtualMachineUUID.String()),
+		)
 	}
 
 	if len(failedVMs) > 0 {
@@ -73,11 +116,19 @@ func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterReq
 	var failedVMs []string
 
 	for _, virtualMachine := range request.VirtualMachines {
-		if vmUUID, err := s.libvirtSvc.DeleteVirtualMachine(virtualMachine); err != nil {
-			log.Printf("unable to remove VM %s (uuid = %v): %s", virtualMachine.Name, vmUUID, err)
+		s.logger.Info("deleting VM", slog.String("vm", virtualMachine.Name))
+
+		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(virtualMachine); err != nil {
+			s.logger.Error("failed to delete VM",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("uuid", vmUUID),
+				slog.String("error", err.Error()),
+			)
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
+
+		s.logger.Info("successfully deleted VM", slog.String("vm", virtualMachine.Name))
 	}
 
 	if len(failedVMs) > 0 {
@@ -87,24 +138,24 @@ func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterReq
 }
 
 func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterRequest) error {
-	baseDomain, err := s.libvirtSvc.FindVirtualMachine(request.BaseVirtualMachine.Name)
+	s.logger.Info("finding base VM for cloning", slog.String("base_vm", request.BaseVirtualMachine.Name))
+
+	baseDomain, err := s.libvirtService.FindVirtualMachine(request.BaseVirtualMachine.Name)
 	if err != nil {
-		err = fmt.Errorf("unable to find base virtual machine %v: %w",
-			request.BaseVirtualMachine.Name,
-			err,
+		s.logger.Error("failed to find base VM",
+			slog.String("base_vm", request.BaseVirtualMachine.Name),
+			slog.String("error", err.Error()),
 		)
-		log.Printf("unable to clone virtual machine cluster: %v", err)
-		return err
+		return fmt.Errorf("unable to find base virtual machine %v: %w", request.BaseVirtualMachine.Name, err)
 	}
 
-	baseDomainXML, err := s.libvirtSvc.ToLibvirtXML(baseDomain)
+	baseDomainXML, err := s.libvirtService.ToLibvirtXML(baseDomain)
 	if err != nil {
-		err = fmt.Errorf("unable to get XML for base virtual machine %v: %w",
-			request.BaseVirtualMachine.Name,
-			err,
+		s.logger.Error("failed to get base VM XML",
+			slog.String("base_vm", request.BaseVirtualMachine.Name),
+			slog.String("error", err.Error()),
 		)
-		log.Printf("unable to clone virtual machine cluster: %v", err)
-		return err
+		return fmt.Errorf("unable to get XML for base virtual machine %v: %w", request.BaseVirtualMachine.Name, err)
 	}
 
 	var baseImagePath string
@@ -115,25 +166,51 @@ func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterReque
 		}
 	}
 
+	s.logger.Debug("found base image", slog.String("path", baseImagePath))
+
 	var failedVMs []string
 
 	for _, virtualMachine := range request.TargetVirtualMachines {
 		virtualMachineUUID := uuid.New()
 
-		if err := s.diskSvc.CreateDisk(virtualMachine.DiskPath, baseImagePath, virtualMachine.DiskSizeGB); err != nil {
-			log.Printf("unable to clone QCOW2 disk for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
-			log.Printf("removing QCOW2 disk: err = %v", os.Remove(virtualMachine.DiskPath))
+		s.logger.Info("cloning VM",
+			slog.String("vm", virtualMachine.Name),
+			slog.String("uuid", virtualMachineUUID.String()),
+			slog.String("from", request.BaseVirtualMachine.Name),
+		)
+
+		if err := s.diskService.CreateDisk(virtualMachine.DiskPath, baseImagePath, virtualMachine.DiskSizeGB); err != nil {
+			s.logger.Error("failed to clone disk",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("uuid", virtualMachineUUID.String()),
+				slog.String("error", err.Error()),
+			)
+			if err := os.Remove(virtualMachine.DiskPath); err != nil {
+				s.logger.Warn("failed to cleanup disk",
+					slog.String("path", virtualMachine.DiskPath),
+					slog.String("error", err.Error()),
+				)
+			}
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
 
 		virtualMachine.BaseImagePath = baseImagePath
 
-		if err := s.libvirtSvc.CloneVirtualMachine(baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
-			log.Printf("unable to remove VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
+		if err := s.libvirtService.CloneVirtualMachine(baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
+			s.logger.Error("failed to clone VM",
+				slog.String("vm", virtualMachine.Name),
+				slog.String("uuid", virtualMachineUUID.String()),
+				slog.String("error", err.Error()),
+			)
 			failedVMs = append(failedVMs, virtualMachine.Name)
 			continue
 		}
+
+		s.logger.Info("successfully cloned VM",
+			slog.String("vm", virtualMachine.Name),
+			slog.String("uuid", virtualMachineUUID.String()),
+		)
 	}
 
 	if len(failedVMs) > 0 {

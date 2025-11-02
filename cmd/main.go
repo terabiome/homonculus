@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/terabiome/homonculus/internal/cloudinit"
@@ -14,6 +14,7 @@ import (
 	"github.com/terabiome/homonculus/internal/libvirt"
 	"github.com/terabiome/homonculus/internal/provisioner"
 	"github.com/terabiome/homonculus/pkg/constants"
+	"github.com/terabiome/homonculus/pkg/logger"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"github.com/urfave/cli/v2"
 )
@@ -21,8 +22,12 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("configuration error: %v", err)
+		slog.Error("configuration error", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
+
+	log := logger.New(cfg.LogLevel)
+	log.Info("homonculus starting", slog.String("log_level", cfg.LogLevel))
 
 	app := &cli.App{
 		Name:                 "homonculus",
@@ -44,7 +49,7 @@ func main() {
 						Name:  "create",
 						Usage: "Create virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg)
+							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -65,10 +70,13 @@ func main() {
 								return err
 							}
 
+							log.Info("creating VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
+
 							if err := provisionerService.CreateCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to create virtual machines from template data: %w", err)
 							}
 
+							log.Info("VM cluster created successfully")
 							return nil
 						},
 					},
@@ -76,7 +84,7 @@ func main() {
 						Name:  "delete",
 						Usage: "Delete virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg)
+							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -97,10 +105,13 @@ func main() {
 								return err
 							}
 
+							log.Info("deleting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
+
 							if err := provisionerService.DeleteCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
 							}
 
+							log.Info("VM cluster deleted successfully")
 							return nil
 						},
 					},
@@ -108,7 +119,7 @@ func main() {
 						Name:  "clone",
 						Usage: "Clone virtual machine(s)",
 						Action: func(ctx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg)
+							provisionerService, err := initProvisioner(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -129,10 +140,16 @@ func main() {
 								return err
 							}
 
+							log.Info("cloning VM cluster",
+								slog.String("base", clusterRequest.BaseVirtualMachine.Name),
+								slog.Int("count", len(clusterRequest.TargetVirtualMachines)),
+							)
+
 							if err := provisionerService.CloneCluster(clusterRequest); err != nil {
 								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
 							}
 
+							log.Info("VM cluster cloned successfully")
 							return nil
 						},
 					},
@@ -142,12 +159,15 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		panic(err)
+		log.Error("application error", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 }
 
-func initProvisioner(cfg *config.Config) (*provisioner.Service, error) {
+func initProvisioner(cfg *config.Config, log *slog.Logger) (*provisioner.Service, error) {
 	engine := templator.NewEngine()
+
+	log.Debug("loading templates")
 
 	if err := engine.LoadTemplate(constants.TemplateLibvirt, cfg.LibvirtTemplatePath); err != nil {
 		return nil, err
@@ -169,9 +189,12 @@ func initProvisioner(cfg *config.Config) (*provisioner.Service, error) {
 		}
 	}
 
+	log.Debug("templates loaded successfully")
+
 	return provisioner.NewService(
-		disk.NewService(),
-		cloudinit.NewService(engine),
-		libvirt.NewService(engine),
+		disk.NewService(log),
+		cloudinit.NewService(engine, log),
+		libvirt.NewService(engine, log),
+		log,
 	), nil
 }
