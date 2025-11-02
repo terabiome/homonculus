@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +11,7 @@ import (
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/internal/disk"
 	"github.com/terabiome/homonculus/internal/libvirt"
+	"github.com/terabiome/homonculus/pkg/executor"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -107,11 +107,17 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 
 	span.SetAttributes(attribute.Int("vm.count", len(request.VirtualMachines)))
 
-	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
 		return fmt.Errorf("failed to get hypervisor connection: %w", err)
 	}
 	defer unlock()
+
+	hypervisor := contracts.HypervisorContext{
+		URI:      "qemu:///system",
+		Conn:     conn,
+		Executor: exec,
+	}
 
 	var failedVMs []string
 
@@ -121,10 +127,6 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 		vmSpan.SetAttributes(attribute.String("vm.name", virtualMachine.Name))
 
 		virtualMachineUUID := uuid.New()
-
-		virtualMachine.Conn = conn
-		virtualMachine.Executor = executor
-		virtualMachine.URI = "qemu:///system"
 
 		exists, err := s.libvirtService.CheckVirtualMachineExistence(virtualMachine.Name)
 		if err != nil {
@@ -152,7 +154,7 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 			slog.Int64("size_gb", virtualMachine.DiskSizeGB),
 		)
 
-		if err := s.diskService.CreateDisk(ctx, virtualMachine); err != nil {
+		if err := s.diskService.CreateDisk(ctx, hypervisor, virtualMachine); err != nil {
 			s.logger.Error("failed to create disk",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
@@ -164,16 +166,18 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 		}
 
 		if virtualMachine.CloudInitISOPath != "" {
-			if err := s.cloudinitService.CreateISO(ctx, virtualMachine, virtualMachineUUID); err != nil {
+			if err := s.cloudinitService.CreateISO(ctx, hypervisor, virtualMachine, virtualMachineUUID); err != nil {
 				s.logger.Error("failed to create cloud-init ISO",
 					slog.String("vm", virtualMachine.Name),
 					slog.String("uuid", virtualMachineUUID.String()),
 					slog.String("error", err.Error()),
 				)
-				if err := os.Remove(virtualMachine.DiskPath); err != nil {
+				result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
+				if cleanupErr != nil {
 					s.logger.Warn("failed to cleanup disk",
 						slog.String("path", virtualMachine.DiskPath),
-						slog.String("error", err.Error()),
+						slog.String("error", cleanupErr.Error()),
+						slog.String("stderr", result.Stderr),
 					)
 				}
 				vmSpan.End()
@@ -184,23 +188,27 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 			s.logger.Debug("skipping cloud-init ISO creation", slog.String("vm", virtualMachine.Name))
 		}
 
-		if err := s.libvirtService.CreateVirtualMachine(virtualMachine, virtualMachineUUID); err != nil {
+		if err := s.libvirtService.CreateVirtualMachine(ctx, hypervisor, virtualMachine, virtualMachineUUID); err != nil {
 			s.logger.Error("failed to create VM",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			if err := os.Remove(virtualMachine.DiskPath); err != nil {
+			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
+			if cleanupErr != nil {
 				s.logger.Warn("failed to cleanup disk",
 					slog.String("path", virtualMachine.DiskPath),
-					slog.String("error", err.Error()),
+					slog.String("error", cleanupErr.Error()),
+					slog.String("stderr", result.Stderr),
 				)
 			}
 			if virtualMachine.CloudInitISOPath != "" {
-				if err := os.Remove(virtualMachine.CloudInitISOPath); err != nil {
+				result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.CloudInitISOPath)
+				if cleanupErr != nil {
 					s.logger.Warn("failed to cleanup cloud-init ISO",
 						slog.String("path", virtualMachine.CloudInitISOPath),
-						slog.String("error", err.Error()),
+						slog.String("error", cleanupErr.Error()),
+						slog.String("stderr", result.Stderr),
 					)
 				}
 			}
@@ -228,11 +236,17 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 }
 
 func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVirtualMachineClusterRequest) error {
-	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
 		return fmt.Errorf("failed to get hypervisor connection: %w", err)
 	}
 	defer unlock()
+
+	hypervisor := contracts.HypervisorContext{
+		URI:      "qemu:///system",
+		Conn:     conn,
+		Executor: exec,
+	}
 
 	var failedVMs []string
 
@@ -240,11 +254,7 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 		startTime := time.Now()
 		s.logger.Info("deleting VM", slog.String("vm", virtualMachine.Name))
 
-		virtualMachine.Conn = conn
-		virtualMachine.Executor = executor
-		virtualMachine.URI = "qemu:///system"
-
-		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(virtualMachine); err != nil {
+		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(ctx, hypervisor, virtualMachine); err != nil {
 			s.logger.Error("failed to delete VM",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", vmUUID),
@@ -279,11 +289,17 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 }
 
 func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtualMachineClusterRequest) error {
-	conn, executor, unlock, err := s.connManager.GetHypervisor()
+	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
 		return fmt.Errorf("failed to get hypervisor connection: %w", err)
 	}
 	defer unlock()
+
+	hypervisor := contracts.HypervisorContext{
+		URI:      "qemu:///system",
+		Conn:     conn,
+		Executor: exec,
+	}
 
 	s.logger.Info("finding base VM for cloning", slog.String("base_vm", request.BaseVirtualMachine.Name))
 
@@ -321,10 +337,6 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 		startTime := time.Now()
 		virtualMachineUUID := uuid.New()
 
-		virtualMachine.Conn = conn
-		virtualMachine.Executor = executor
-		virtualMachine.URI = "qemu:///system"
-
 		s.logger.Info("cloning VM",
 			slog.String("vm", virtualMachine.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
@@ -333,16 +345,18 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 
 		virtualMachine.BaseImagePath = baseImagePath
 
-		if err := s.diskService.CreateDiskForClone(ctx, virtualMachine); err != nil {
+		if err := s.diskService.CreateDiskForClone(ctx, hypervisor, virtualMachine); err != nil {
 			s.logger.Error("failed to clone disk",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			if err := os.Remove(virtualMachine.DiskPath); err != nil {
+			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
+			if cleanupErr != nil {
 				s.logger.Warn("failed to cleanup disk",
 					slog.String("path", virtualMachine.DiskPath),
-					slog.String("error", err.Error()),
+					slog.String("error", cleanupErr.Error()),
+					slog.String("stderr", result.Stderr),
 				)
 			}
 			if s.vmCloneCounter != nil {
@@ -355,14 +369,20 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 			continue
 		}
 
-		virtualMachine.BaseImagePath = baseImagePath
-
-		if err := s.libvirtService.CloneVirtualMachine(baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
+		if err := s.libvirtService.CloneVirtualMachine(ctx, hypervisor, baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
 			s.logger.Error("failed to clone VM",
 				slog.String("vm", virtualMachine.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
+			result, cleanupErr := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", virtualMachine.DiskPath)
+			if cleanupErr != nil {
+				s.logger.Warn("failed to cleanup disk",
+					slog.String("path", virtualMachine.DiskPath),
+					slog.String("error", cleanupErr.Error()),
+					slog.String("stderr", result.Stderr),
+				)
+			}
 			if s.vmCloneCounter != nil {
 				s.vmCloneCounter.Add(ctx, 1, metric.WithAttributes(
 					attribute.String("status", "failed"),

@@ -6,8 +6,7 @@ import (
 )
 
 type HypervisorContext struct {
-	URI      string
-	Conn     *libvirt.Connect
-	Executor executor.Executor
+	URI      string            `json:"-"`
+	Conn     *libvirt.Connect  `json:"-"`
+	Executor executor.Executor `json:"-"`
 }
-

@@ -1,13 +1,14 @@
 package libvirt
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/google/uuid"
 	"github.com/terabiome/homonculus/internal/contracts"
 	"github.com/terabiome/homonculus/pkg/constants"
+	"github.com/terabiome/homonculus/pkg/executor"
 	"github.com/terabiome/homonculus/pkg/templator"
 	"libvirt.org/go/libvirt"
 	"libvirt.org/go/libvirtxml"
@@ -25,7 +26,7 @@ func NewService(engine *templator.Engine, logger *slog.Logger) *Service {
 	}
 }
 
-func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineRequest, virtualMachineUUID uuid.UUID) error {
+func (svc *Service) CreateVirtualMachine(ctx context.Context, hypervisor contracts.HypervisorContext, request contracts.CreateVirtualMachineRequest, virtualMachineUUID uuid.UUID) error {
 	vars := LibvirtTemplateVars{
 		Name:                   request.Name,
 		UUID:                   virtualMachineUUID,
@@ -42,14 +43,7 @@ func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineR
 	}
 	svc.logger.Debug("rendered libvirt XML", slog.String("vm", request.Name))
 
-	conn, err := libvirt.NewConnect("qemu:///system")
-	if err != nil {
-		return fmt.Errorf("could not connect to hypervisor: %w", err)
-	}
-	defer conn.Close()
-	svc.logger.Debug("connected to hypervisor")
-
-	domain, err := conn.DomainDefineXML(string(bytes))
+	domain, err := hypervisor.Conn.DomainDefineXML(string(bytes))
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
@@ -63,15 +57,8 @@ func (svc *Service) CreateVirtualMachine(request contracts.CreateVirtualMachineR
 	return nil
 }
 
-func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineRequest) (string, error) {
-	conn, err := libvirt.NewConnect("qemu:///system")
-	if err != nil {
-		return "", fmt.Errorf("could not connect to hypervisor: %w", err)
-	}
-	defer conn.Close()
-	svc.logger.Debug("connected to hypervisor")
-
-	domain, err := conn.LookupDomainByName(request.Name)
+func (svc *Service) DeleteVirtualMachine(ctx context.Context, hypervisor contracts.HypervisorContext, request contracts.DeleteVirtualMachineRequest) (string, error) {
+	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
 	if err != nil {
 		return "", fmt.Errorf("could not look up VM by name: %w", err)
 	}
@@ -99,8 +86,15 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 			slog.String("type", disk.Driver.Type),
 			slog.String("path", disk.Source.File.File),
 		)
-		if err := os.Remove(disk.Source.File.File); err != nil {
-			return "", fmt.Errorf("could not delete disk in VM: %w", err)
+
+		result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "rm", "-f", disk.Source.File.File)
+		if err != nil {
+			svc.logger.Warn("failed to delete disk",
+				slog.String("vm", request.Name),
+				slog.String("path", disk.Source.File.File),
+				slog.String("error", err.Error()),
+				slog.String("stderr", result.Stderr),
+			)
 		}
 	}
 
@@ -170,14 +164,7 @@ func (svc *Service) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, err
 	return domainXML, nil
 }
 
-func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetInfo contracts.TargetVirtualMachineCloneInfo, virtualMachineUUID uuid.UUID) error {
-	conn, err := libvirt.NewConnect("qemu:///system")
-	if err != nil {
-		return fmt.Errorf("could not connect to hypervisor: %w", err)
-	}
-	defer conn.Close()
-	svc.logger.Debug("connected to hypervisor")
-
+func (svc *Service) CloneVirtualMachine(ctx context.Context, hypervisor contracts.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo contracts.TargetVirtualMachineCloneInfo, virtualMachineUUID uuid.UUID) error {
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
 	newDomainXML.UUID = virtualMachineUUID.String()
@@ -199,7 +186,7 @@ func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetI
 		return fmt.Errorf("could not serialize Libvirt XML to string: %w", err)
 	}
 
-	domain, err := conn.DomainDefineXML(newDomainXMLString)
+	domain, err := hypervisor.Conn.DomainDefineXML(newDomainXMLString)
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}

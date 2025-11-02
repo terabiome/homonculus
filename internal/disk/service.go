@@ -21,7 +21,7 @@ func NewService(logger *slog.Logger) *Service {
 	}
 }
 
-func (s *Service) CreateDisk(ctx context.Context, req contracts.CreateVirtualMachineRequest) error {
+func (s *Service) CreateDisk(ctx context.Context, hypervisor contracts.HypervisorContext, req contracts.CreateVirtualMachineRequest) error {
 	s.logger.Debug("creating qcow2 disk",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),
@@ -45,7 +45,7 @@ func (s *Service) CreateDisk(ctx context.Context, req contracts.CreateVirtualMac
 		fmt.Sprintf("%dG", req.DiskSizeGB),
 	}
 
-	result, err := executor.RunAndCapture(ctx, req.Executor, "qemu-img", args...)
+	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "qemu-img", args...)
 	if err != nil {
 		return fmt.Errorf("qemu-img failed: %w\nstdout: %s\nstderr: %s",
 			err, result.Stdout, result.Stderr)
@@ -59,7 +59,7 @@ func (s *Service) CreateDisk(ctx context.Context, req contracts.CreateVirtualMac
 	return nil
 }
 
-func (s *Service) CreateDiskForClone(ctx context.Context, req contracts.TargetVirtualMachineCloneInfo) error {
+func (s *Service) CreateDiskForClone(ctx context.Context, hypervisor contracts.HypervisorContext, req contracts.TargetVirtualMachineCloneInfo) error {
 	s.logger.Debug("creating qcow2 disk for clone",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),
@@ -83,7 +83,7 @@ func (s *Service) CreateDiskForClone(ctx context.Context, req contracts.TargetVi
 		fmt.Sprintf("%dG", req.DiskSizeGB),
 	}
 
-	result, err := executor.RunAndCapture(ctx, req.Executor, "qemu-img", args...)
+	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "qemu-img", args...)
 	if err != nil {
 		return fmt.Errorf("qemu-img failed: %w\nstdout: %s\nstderr: %s",
 			err, result.Stdout, result.Stderr)

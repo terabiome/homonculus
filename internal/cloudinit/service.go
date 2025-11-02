@@ -25,7 +25,7 @@ func NewService(engine *templator.Engine, logger *slog.Logger) *Service {
 	}
 }
 
-func (svc *Service) CreateISO(ctx context.Context, vmRequest contracts.CreateVirtualMachineRequest, instanceID uuid.UUID) error {
+func (svc *Service) CreateISO(ctx context.Context, hypervisor contracts.HypervisorContext, vmRequest contracts.CreateVirtualMachineRequest, instanceID uuid.UUID) error {
 	dirPath := filepath.Dir(vmRequest.CloudInitISOPath)
 
 	userDataPath := filepath.Join(dirPath, "user-data")
@@ -57,7 +57,7 @@ func (svc *Service) CreateISO(ctx context.Context, vmRequest contracts.CreateVir
 	args := []string{"-output", vmRequest.CloudInitISOPath, "-volid", "cidata", "-joliet", "-r"}
 	args = append(args, isoFiles...)
 
-	result, err := executor.RunAndCapture(ctx, vmRequest.Executor, "mkisofs", args...)
+	result, err := executor.RunAndCapture(ctx, hypervisor.Executor, "mkisofs", args...)
 	if err != nil {
 		return fmt.Errorf("mkisofs failed: %w\nstdout: %s\nstderr: %s",
 			err, result.Stdout, result.Stderr)
