@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func New(level string) *slog.Logger {
+func New(level, format string) *slog.Logger {
 	var logLevel slog.Level
 
 	switch strings.ToLower(level) {
@@ -22,9 +22,22 @@ func New(level string) *slog.Logger {
 		logLevel = slog.LevelInfo
 	}
 
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: logLevel,
-	})
+	}
+
+	var handler slog.Handler
+
+	switch strings.ToLower(format) {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	default:
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
 
 	return slog.New(handler)
+}
+
+func NewWithComponent(level, format, component string) *slog.Logger {
+	return New(level, format).With(slog.String("component", component))
 }

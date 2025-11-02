@@ -13,6 +13,7 @@ type Config struct {
 	CloudInitMetaDataTemplate      string
 	CloudInitNetworkConfigTemplate string
 	LogLevel                       string
+	LogFormat                      string
 }
 
 func Load() (*Config, error) {
@@ -21,6 +22,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("cloudinit_meta_data_template", "./templates/cloudinit/meta-data.tpl")
 	viper.SetDefault("cloudinit_network_config_template", "./templates/cloudinit/network-config.tpl")
 	viper.SetDefault("log_level", "info")
+	viper.SetDefault("log_format", "text")
 
 	viper.SetEnvPrefix("homonculus")
 	viper.AutomaticEnv()
@@ -31,6 +33,7 @@ func Load() (*Config, error) {
 		CloudInitMetaDataTemplate:      viper.GetString("cloudinit_meta_data_template"),
 		CloudInitNetworkConfigTemplate: viper.GetString("cloudinit_network_config_template"),
 		LogLevel:                       viper.GetString("log_level"),
+		LogFormat:                      viper.GetString("log_format"),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -64,6 +67,11 @@ func (c *Config) Validate() error {
 	validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 	if !validLogLevels[c.LogLevel] {
 		return fmt.Errorf("invalid log level: %s (valid: debug, info, warn, error)", c.LogLevel)
+	}
+
+	validLogFormats := map[string]bool{"text": true, "json": true}
+	if !validLogFormats[c.LogFormat] {
+		return fmt.Errorf("invalid log format: %s (valid: text, json)", c.LogFormat)
 	}
 
 	return nil

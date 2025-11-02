@@ -26,8 +26,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	log := logger.New(cfg.LogLevel)
-	log.Info("homonculus starting", slog.String("log_level", cfg.LogLevel))
+	log := logger.New(cfg.LogLevel, cfg.LogFormat)
+	log.Info("homonculus starting",
+		slog.String("log_level", cfg.LogLevel),
+		slog.String("log_format", cfg.LogFormat),
+	)
 
 	app := &cli.App{
 		Name:                 "homonculus",
