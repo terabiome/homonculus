@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -62,6 +63,46 @@ func (s *Service) DeleteCluster(request contracts.DeleteVirtualMachineClusterReq
 	for _, virtualMachine := range request.VirtualMachines {
 		if vmUUID, err := s.libvirtSvc.DeleteVirtualMachine(virtualMachine); err != nil {
 			log.Printf("unable to remove VM %s (uuid = %v): %s", virtualMachine.Name, vmUUID, err)
+			continue
+		}
+	}
+	return nil
+}
+
+func (s *Service) CloneCluster(request contracts.CloneVirtualMachineClusterRequest) error {
+	baseDomain, err := s.libvirtSvc.FindVirtualMachine(request.BaseVirtualMachine.Name)
+	if err != nil {
+		err = fmt.Errorf("unable to find base virtual machine %v: %w",
+			request.BaseVirtualMachine.Name,
+			err,
+		)
+		log.Printf("unable to clone virtual machine cluster: %v", err)
+		return err
+	}
+
+	baseDomainXML, _ := s.libvirtSvc.ToLibvirtXML(baseDomain)
+
+	var baseImagePath string
+	for _, disk := range baseDomainXML.Devices.Disks {
+		if disk.Driver.Type == "qcow2" {
+			baseImagePath = disk.Source.File.File
+			break
+		}
+	}
+
+	for _, virtualMachine := range request.TargetVirtualMachines {
+		virtualMachineUUID := uuid.New()
+
+		if err := s.diskSvc.CreateDisk(virtualMachine.DiskPath, baseImagePath, virtualMachine.DiskSizeGB); err != nil {
+			log.Printf("unable to clone QCOW2 disk for VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
+			log.Printf("removing QCOW2 disk: err = %v", os.Remove(virtualMachine.DiskPath))
+			continue
+		}
+
+		virtualMachine.BaseImagePath = baseImagePath
+
+		if err := s.libvirtSvc.CloneVirtualMachine(baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
+			log.Printf("unable to remove VM %s (uuid = %v): %s", virtualMachine.Name, virtualMachineUUID, err)
 			continue
 		}
 	}

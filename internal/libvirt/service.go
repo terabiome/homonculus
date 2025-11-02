@@ -115,3 +115,79 @@ func (svc *Service) DeleteVirtualMachine(request contracts.DeleteVirtualMachineR
 
 	return domain.GetUUIDString()
 }
+
+func (svc *Service) FindVirtualMachine(name string) (*libvirt.Domain, error) {
+	conn, err := libvirt.NewConnect("qemu:///system")
+	if err != nil {
+		return nil, fmt.Errorf("could not connect to hypervisor: %w", err)
+	}
+	log.Println("connected to hypervisor")
+
+	domain, err := conn.LookupDomainByName(name)
+	if err != nil {
+		return nil, fmt.Errorf("could not look up VM by name: %w", err)
+	}
+	log.Println("looked up VM by name")
+
+	return domain, err
+}
+
+func (svc *Service) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error) {
+	domainXML := libvirtxml.Domain{}
+	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+	if err != nil {
+		return domainXML, fmt.Errorf("could not read domain XML: %w", err)
+	}
+	log.Println("read domain XML")
+
+	err = domainXML.Unmarshal(domainXMLString)
+	if err != nil {
+		return domainXML, fmt.Errorf("could not parse domain XML: %w", err)
+	}
+	log.Println("parsed domain XML")
+	return domainXML, nil
+}
+
+func (svc *Service) CloneVirtualMachine(baseDomainXML libvirtxml.Domain, targetInfo contracts.TargetVirtualMachineCloneInfo, virtualMachineUUID uuid.UUID) error {
+	conn, err := libvirt.NewConnect("qemu:///system")
+	if err != nil {
+		return fmt.Errorf("could not connect to hypervisor: %w", err)
+	}
+	log.Println("connected to hypervisor")
+
+	// clone XML data
+	newDomainXML := baseDomainXML
+	newDomainXML.Name = targetInfo.Name
+	newDomainXML.UUID = virtualMachineUUID.String()
+	newDomainXML.VCPU.Value = uint(targetInfo.VCPU)
+	newDomainXML.CurrentMemory.Value = uint(targetInfo.MemoryMB << 10)
+	newDomainXML.CurrentMemory.Unit = "KiB"
+	newDomainXML.Memory.Value = uint(targetInfo.MemoryMB << 10)
+	newDomainXML.Memory.Unit = "KiB"
+	for idx, disk := range newDomainXML.Devices.Disks {
+		if disk.Driver.Type == "qcow2" {
+			disk.Source.File.File = targetInfo.DiskPath
+			newDomainXML.Devices.Disks[idx] = disk
+			break
+		}
+	}
+
+	newDomainXMLString, err := newDomainXML.Marshal()
+	if err != nil {
+		return fmt.Errorf("could not serialize Libvirt XML to string: %w", err)
+	}
+
+	domain, err := conn.DomainDefineXML(newDomainXMLString)
+	if err != nil {
+		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
+	}
+	log.Println("defined VM from Libvirt XML")
+
+	if err = domain.Create(); err != nil {
+		return fmt.Errorf("could not start VM from Libvirt XML: %w", err)
+	}
+	log.Println("started VM from Libvirt XML")
+
+	return nil
+
+}

@@ -92,6 +92,28 @@ func main() {
 							return nil
 						},
 					},
+					{
+						Name:  "clone",
+						Usage: "Clone virtual machine(s)",
+						Action: func(ctx *cli.Context) error {
+							filepath := ctx.Args().First()
+							if filepath == "" {
+								return errors.New("empty file path to virtualmachine config")
+							}
+
+							f, _ := os.Open(filepath)
+
+							var clusterRequest contracts.CloneVirtualMachineClusterRequest
+							err = json.NewDecoder(f).Decode(&clusterRequest)
+
+							err := provisionerService.CloneCluster(clusterRequest)
+							if err != nil {
+								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
+							}
+
+							return nil
+						},
+					},
 				},
 			},
 		},
