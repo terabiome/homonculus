@@ -1,4 +1,4 @@
-package provisioner
+package service
 
 import (
 	"context"
@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/terabiome/homonculus/internal/cloudinit"
-	"github.com/terabiome/homonculus/internal/contracts"
-	"github.com/terabiome/homonculus/internal/disk"
-	"github.com/terabiome/homonculus/internal/libvirt"
+	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/infrastructure/cloudinit"
+	"github.com/terabiome/homonculus/internal/infrastructure/disk"
+	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
+	"github.com/terabiome/homonculus/internal/runtime"
+	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"go.opentelemetry.io/otel"
@@ -18,10 +20,11 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Service struct {
-	diskService      *disk.Service
-	cloudinitService *cloudinit.Service
-	libvirtService   *libvirt.Service
+// VMService provides transport-agnostic VM operations.
+type VMService struct {
+	diskManager      *disk.Manager
+	cloudinitManager *cloudinit.Manager
+	libvirtManager   *libvirt.Manager
 	connManager      *pkglibvirt.ConnectionManager
 	logger           *slog.Logger
 
@@ -32,14 +35,15 @@ type Service struct {
 	vmCloneDuration  metric.Float64Histogram
 }
 
-func NewService(
-	diskService *disk.Service,
-	cloudinitService *cloudinit.Service,
-	libvirtService *libvirt.Service,
+// NewVMService creates a new VMService.
+func NewVMService(
+	diskManager *disk.Manager,
+	cloudinitManager *cloudinit.Manager,
+	libvirtManager *libvirt.Manager,
 	connManager *pkglibvirt.ConnectionManager,
 	logger *slog.Logger,
-) *Service {
-	meter := otel.Meter("homonculus/provisioner")
+) *VMService {
+	meter := otel.Meter("homonculus/service")
 
 	vmDeleteCounter, err := meter.Int64Counter(
 		"homonculus.vm.delete",
@@ -86,12 +90,12 @@ func NewService(
 		logger.Warn("failed to create vmCloneDuration metric", slog.String("error", err.Error()))
 	}
 
-	return &Service{
-		diskService:      diskService,
-		cloudinitService: cloudinitService,
-		libvirtService:   libvirtService,
+	return &VMService{
+		diskManager:      diskManager,
+		cloudinitManager: cloudinitManager,
+		libvirtManager:   libvirtManager,
 		connManager:      connManager,
-		logger:           logger.With(slog.String("service", "provisioner")),
+		logger:           logger.With(slog.String("service", "vm")),
 		vmDeleteCounter:  vmDeleteCounter,
 		vmCloneCounter:   vmCloneCounter,
 		vmCreateDuration: vmCreateDuration,
@@ -100,12 +104,13 @@ func NewService(
 	}
 }
 
-func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVirtualMachineClusterRequest) error {
-	tracer := otel.Tracer("homonculus/provisioner")
+// CreateCluster creates multiple VMs from transport-agnostic parameters.
+func (s *VMService) CreateCluster(ctx context.Context, vms []CreateVMParams) error {
+	tracer := otel.Tracer("homonculus/service")
 	ctx, span := tracer.Start(ctx, "CreateCluster")
 	defer span.End()
 
-	span.SetAttributes(attribute.Int("vm.count", len(request.VirtualMachines)))
+	span.SetAttributes(attribute.Int("vm.count", len(vms)))
 
 	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
@@ -113,7 +118,7 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 	}
 	defer unlock()
 
-	hypervisor := contracts.HypervisorContext{
+	hypervisor := runtime.HypervisorContext{
 		URI:      "qemu:///system",
 		Conn:     conn,
 		Executor: exec,
@@ -121,103 +126,106 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 
 	var failedVMs []string
 
-	for _, virtualMachine := range request.VirtualMachines {
+	for _, vm := range vms {
 		startTime := time.Now()
 		_, vmSpan := tracer.Start(ctx, "CreateVM")
-		vmSpan.SetAttributes(attribute.String("vm.name", virtualMachine.Name))
+		vmSpan.SetAttributes(attribute.String("vm.name", vm.Name))
 
 		virtualMachineUUID := uuid.New()
 
-		exists, err := s.libvirtService.CheckVirtualMachineExistence(virtualMachine.Name)
+		exists, err := s.libvirtManager.CheckVirtualMachineExistence(vm.Name)
 		if err != nil {
 			s.logger.Error("failed to check if VM exists",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", vm.Name),
 				slog.String("error", err.Error()),
 			)
 			vmSpan.End()
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, vm.Name)
 			continue
 		}
 
 		if exists {
 			s.logger.Warn("VM already exists, skipping",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", vm.Name),
 			)
 			vmSpan.End()
 			continue
 		}
 
 		s.logger.Info("creating VM disk",
-			slog.String("vm", virtualMachine.Name),
+			slog.String("vm", vm.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
-			slog.String("path", virtualMachine.DiskPath),
-			slog.Int64("size_gb", virtualMachine.DiskSizeGB),
+			slog.String("path", vm.DiskPath),
+			slog.Int64("size_gb", vm.DiskSizeGB),
 		)
 
-		if err := s.diskService.CreateDisk(ctx, hypervisor, virtualMachine); err != nil {
+		// Convert service params to infrastructure contract
+		createReq := s.toCreateVMRequest(vm)
+
+		if err := s.diskManager.CreateDisk(ctx, hypervisor, createReq); err != nil {
 			s.logger.Error("failed to create disk",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", vm.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
 			vmSpan.End()
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, vm.Name)
 			continue
 		}
 
-		if virtualMachine.CloudInitISOPath != "" {
-			if err := s.cloudinitService.CreateISO(ctx, hypervisor, virtualMachine, virtualMachineUUID); err != nil {
+		if vm.CloudInitISOPath != "" {
+			if err := s.cloudinitManager.CreateISO(ctx, hypervisor, createReq, virtualMachineUUID); err != nil {
 				s.logger.Error("failed to create cloud-init ISO",
-					slog.String("vm", virtualMachine.Name),
+					slog.String("vm", vm.Name),
 					slog.String("uuid", virtualMachineUUID.String()),
 					slog.String("error", err.Error()),
 				)
-				if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
+				if err := fileops.RemoveFile(ctx, hypervisor.Executor, vm.DiskPath); err != nil {
 					s.logger.Warn("failed to cleanup disk",
-						slog.String("path", virtualMachine.DiskPath),
+						slog.String("path", vm.DiskPath),
 						slog.String("error", err.Error()),
 					)
 				}
 				vmSpan.End()
-				failedVMs = append(failedVMs, virtualMachine.Name)
+				failedVMs = append(failedVMs, vm.Name)
 				continue
 			}
 		} else {
-			s.logger.Debug("skipping cloud-init ISO creation", slog.String("vm", virtualMachine.Name))
+			s.logger.Debug("skipping cloud-init ISO creation", slog.String("vm", vm.Name))
 		}
 
-		if err := s.libvirtService.CreateVirtualMachine(ctx, hypervisor, virtualMachine, virtualMachineUUID); err != nil {
+		if err := s.libvirtManager.CreateVirtualMachine(ctx, hypervisor, createReq, virtualMachineUUID); err != nil {
 			s.logger.Error("failed to create VM",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", vm.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, vm.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
-					slog.String("path", virtualMachine.DiskPath),
+					slog.String("path", vm.DiskPath),
 					slog.String("error", err.Error()),
 				)
 			}
-			if virtualMachine.CloudInitISOPath != "" {
-				if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.CloudInitISOPath); err != nil {
+			if vm.CloudInitISOPath != "" {
+				if err := fileops.RemoveFile(ctx, hypervisor.Executor, vm.CloudInitISOPath); err != nil {
 					s.logger.Warn("failed to cleanup cloud-init ISO",
-						slog.String("path", virtualMachine.CloudInitISOPath),
+						slog.String("path", vm.CloudInitISOPath),
 						slog.String("error", err.Error()),
 					)
 				}
 			}
 			vmSpan.End()
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, vm.Name)
 			continue
 		}
 
 		s.logger.Info("successfully created VM",
-			slog.String("vm", virtualMachine.Name),
+			slog.String("vm", vm.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
 		)
 		if s.vmCreateDuration != nil {
 			s.vmCreateDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
-				attribute.String("vm.name", virtualMachine.Name),
+				attribute.String("vm.name", vm.Name),
 			))
 		}
 		vmSpan.End()
@@ -229,14 +237,15 @@ func (s *Service) CreateCluster(ctx context.Context, request contracts.CreateVir
 	return nil
 }
 
-func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVirtualMachineClusterRequest) error {
+// DeleteCluster deletes multiple VMs.
+func (s *VMService) DeleteCluster(ctx context.Context, vms []DeleteVMParams) error {
 	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
 		return fmt.Errorf("failed to get hypervisor connection: %w", err)
 	}
 	defer unlock()
 
-	hypervisor := contracts.HypervisorContext{
+	hypervisor := runtime.HypervisorContext{
 		URI:      "qemu:///system",
 		Conn:     conn,
 		Executor: exec,
@@ -244,13 +253,16 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 
 	var failedVMs []string
 
-	for _, virtualMachine := range request.VirtualMachines {
+	for _, vm := range vms {
 		startTime := time.Now()
-		s.logger.Info("deleting VM", slog.String("vm", virtualMachine.Name))
+		s.logger.Info("deleting VM", slog.String("vm", vm.Name))
 
-		if vmUUID, err := s.libvirtService.DeleteVirtualMachine(ctx, hypervisor, virtualMachine); err != nil {
+		// Convert service params to infrastructure contract
+		deleteReq := s.toDeleteVMRequest(vm)
+
+		if vmUUID, err := s.libvirtManager.DeleteVirtualMachine(ctx, hypervisor, deleteReq); err != nil {
 			s.logger.Error("failed to delete VM",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", vm.Name),
 				slog.String("uuid", vmUUID),
 				slog.String("error", err.Error()),
 			)
@@ -259,11 +271,11 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 					attribute.String("status", "failed"),
 				))
 			}
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, vm.Name)
 			continue
 		}
 
-		s.logger.Info("successfully deleted VM", slog.String("vm", virtualMachine.Name))
+		s.logger.Info("successfully deleted VM", slog.String("vm", vm.Name))
 		if s.vmDeleteCounter != nil {
 			s.vmDeleteCounter.Add(ctx, 1, metric.WithAttributes(
 				attribute.String("status", "success"),
@@ -271,7 +283,7 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 		}
 		if s.vmDeleteDuration != nil {
 			s.vmDeleteDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
-				attribute.String("vm.name", virtualMachine.Name),
+				attribute.String("vm.name", vm.Name),
 			))
 		}
 	}
@@ -282,37 +294,38 @@ func (s *Service) DeleteCluster(ctx context.Context, request contracts.DeleteVir
 	return nil
 }
 
-func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtualMachineClusterRequest) error {
+// CloneCluster clones a base VM into multiple target VMs.
+func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) error {
 	conn, exec, unlock, err := s.connManager.GetHypervisor()
 	if err != nil {
 		return fmt.Errorf("failed to get hypervisor connection: %w", err)
 	}
 	defer unlock()
 
-	hypervisor := contracts.HypervisorContext{
+	hypervisor := runtime.HypervisorContext{
 		URI:      "qemu:///system",
 		Conn:     conn,
 		Executor: exec,
 	}
 
-	s.logger.Info("finding base VM for cloning", slog.String("base_vm", request.BaseVirtualMachine.Name))
+	s.logger.Info("finding base VM for cloning", slog.String("base_vm", params.BaseVMName))
 
-	baseDomain, err := s.libvirtService.FindVirtualMachine(request.BaseVirtualMachine.Name)
+	baseDomain, err := s.libvirtManager.FindVirtualMachine(params.BaseVMName)
 	if err != nil {
 		s.logger.Error("failed to find base VM",
-			slog.String("base_vm", request.BaseVirtualMachine.Name),
+			slog.String("base_vm", params.BaseVMName),
 			slog.String("error", err.Error()),
 		)
-		return fmt.Errorf("unable to find base virtual machine %v: %w", request.BaseVirtualMachine.Name, err)
+		return fmt.Errorf("unable to find base virtual machine %v: %w", params.BaseVMName, err)
 	}
 
-	baseDomainXML, err := s.libvirtService.ToLibvirtXML(baseDomain)
+	baseDomainXML, err := s.libvirtManager.ToLibvirtXML(baseDomain)
 	if err != nil {
 		s.logger.Error("failed to get base VM XML",
-			slog.String("base_vm", request.BaseVirtualMachine.Name),
+			slog.String("base_vm", params.BaseVMName),
 			slog.String("error", err.Error()),
 		)
-		return fmt.Errorf("unable to get XML for base virtual machine %v: %w", request.BaseVirtualMachine.Name, err)
+		return fmt.Errorf("unable to get XML for base virtual machine %v: %w", params.BaseVMName, err)
 	}
 
 	var baseImagePath string
@@ -327,27 +340,31 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 
 	var failedVMs []string
 
-	for _, virtualMachine := range request.TargetVirtualMachines {
+	for _, targetVM := range params.TargetSpecs {
 		startTime := time.Now()
 		virtualMachineUUID := uuid.New()
 
 		s.logger.Info("cloning VM",
-			slog.String("vm", virtualMachine.Name),
+			slog.String("vm", targetVM.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
-			slog.String("from", request.BaseVirtualMachine.Name),
+			slog.String("from", params.BaseVMName),
 		)
 
-		virtualMachine.BaseImagePath = baseImagePath
+		// Set base image path from base VM
+		targetVM.BaseImagePath = baseImagePath
 
-		if err := s.diskService.CreateDiskForClone(ctx, hypervisor, virtualMachine); err != nil {
+		// Convert service params to infrastructure contract
+		targetSpec := s.toTargetVMSpec(targetVM)
+
+		if err := s.diskManager.CreateDiskForClone(ctx, hypervisor, targetSpec); err != nil {
 			s.logger.Error("failed to clone disk",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", targetVM.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, targetVM.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
-					slog.String("path", virtualMachine.DiskPath),
+					slog.String("path", targetVM.DiskPath),
 					slog.String("error", err.Error()),
 				)
 			}
@@ -357,19 +374,19 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 					attribute.String("reason", "disk_clone_error"),
 				))
 			}
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, targetVM.Name)
 			continue
 		}
 
-		if err := s.libvirtService.CloneVirtualMachine(ctx, hypervisor, baseDomainXML, virtualMachine, virtualMachineUUID); err != nil {
+		if err := s.libvirtManager.CloneVirtualMachine(ctx, hypervisor, baseDomainXML, targetSpec, virtualMachineUUID); err != nil {
 			s.logger.Error("failed to clone VM",
-				slog.String("vm", virtualMachine.Name),
+				slog.String("vm", targetVM.Name),
 				slog.String("uuid", virtualMachineUUID.String()),
 				slog.String("error", err.Error()),
 			)
-			if err := fileops.RemoveFile(ctx, hypervisor.Executor, virtualMachine.DiskPath); err != nil {
+			if err := fileops.RemoveFile(ctx, hypervisor.Executor, targetVM.DiskPath); err != nil {
 				s.logger.Warn("failed to cleanup disk",
-					slog.String("path", virtualMachine.DiskPath),
+					slog.String("path", targetVM.DiskPath),
 					slog.String("error", err.Error()),
 				)
 			}
@@ -379,12 +396,12 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 					attribute.String("reason", "vm_clone_error"),
 				))
 			}
-			failedVMs = append(failedVMs, virtualMachine.Name)
+			failedVMs = append(failedVMs, targetVM.Name)
 			continue
 		}
 
 		s.logger.Info("successfully cloned VM",
-			slog.String("vm", virtualMachine.Name),
+			slog.String("vm", targetVM.Name),
 			slog.String("uuid", virtualMachineUUID.String()),
 		)
 		if s.vmCloneCounter != nil {
@@ -394,7 +411,7 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 		}
 		if s.vmCloneDuration != nil {
 			s.vmCloneDuration.Record(ctx, time.Since(startTime).Seconds(), metric.WithAttributes(
-				attribute.String("vm.name", virtualMachine.Name),
+				attribute.String("vm.name", targetVM.Name),
 			))
 		}
 	}
@@ -404,3 +421,47 @@ func (s *Service) CloneCluster(ctx context.Context, request contracts.CloneVirtu
 	}
 	return nil
 }
+
+// Helper methods to convert service params to infrastructure contracts
+
+func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest {
+	// Convert service.UserConfig to api.UserConfig
+	userConfigs := make([]api.UserConfig, len(params.UserConfigs))
+	for i, uc := range params.UserConfigs {
+		userConfigs[i] = api.UserConfig{
+			Username:          uc.Username,
+			SSHAuthorizedKeys: uc.SSHAuthorizedKeys,
+		}
+	}
+
+	return api.CreateVMRequest{
+		Name:                   params.Name,
+		VCPU:                   params.VCPU,
+		MemoryMB:               params.MemoryMB,
+		DiskPath:               params.DiskPath,
+		DiskSizeGB:             params.DiskSizeGB,
+		BaseImagePath:          params.BaseImagePath,
+		BridgeNetworkInterface: params.BridgeNetworkInterface,
+		CloudInitISOPath:       params.CloudInitISOPath,
+		Role:                   constants.KubernetesRole(params.Role),
+		UserConfigs:            userConfigs,
+	}
+}
+
+func (s *VMService) toDeleteVMRequest(params DeleteVMParams) api.DeleteVMRequest {
+	return api.DeleteVMRequest{
+		Name: params.Name,
+	}
+}
+
+func (s *VMService) toTargetVMSpec(spec TargetVMSpec) api.TargetVMSpec {
+	return api.TargetVMSpec{
+		Name:          spec.Name,
+		VCPU:          spec.VCPU,
+		MemoryMB:      spec.MemoryMB,
+		DiskPath:      spec.DiskPath,
+		DiskSizeGB:    spec.DiskSizeGB,
+		BaseImagePath: spec.BaseImagePath,
+	}
+}
+

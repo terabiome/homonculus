@@ -1,13 +1,13 @@
 package cloudinit
 
 import (
-	"github.com/terabiome/homonculus/internal/contracts"
+	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/pkg/constants"
 )
 
 type UserDataTemplateVars struct {
 	Hostname    string
-	UserConfigs []contracts.UserConfig
+	UserConfigs []api.UserConfig
 	Role        constants.KubernetesRole
 }
 
@@ -19,3 +19,4 @@ type MetaDataTemplateVars struct {
 type NetworkConfigTemplateVars struct {
 	Hostname string
 }
+

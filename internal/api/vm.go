@@ -1,17 +1,9 @@
-package contracts
+package api
 
 import "github.com/terabiome/homonculus/pkg/constants"
 
-type UserConfig struct {
-	Username          string   `json:"username"`
-	SSHAuthorizedKeys []string `json:"ssh_authorized_keys"`
-}
-
-type CreateVirtualMachineClusterRequest struct {
-	VirtualMachines []CreateVirtualMachineRequest `json:"virtual_machines"`
-}
-
-type CreateVirtualMachineRequest struct {
+// CreateVMRequest contains the configuration for creating a single virtual machine.
+type CreateVMRequest struct {
 	Name                   string                   `json:"name"`
 	VCPU                   int                      `json:"vcpu"`
 	MemoryMB               int64                    `json:"memory_mb"`
@@ -20,30 +12,28 @@ type CreateVirtualMachineRequest struct {
 	BaseImagePath          string                   `json:"base_image_path"`
 	BridgeNetworkInterface string                   `json:"bridge_network_interface"`
 	CloudInitISOPath       string                   `json:"cloud_init_iso_path"`
-	Role                   constants.KubernetesRole `json:"role"`
+	Role                   constants.KubernetesRole `json:"role,omitempty"`
 	UserConfigs            []UserConfig             `json:"user_configs"`
 }
-type DeleteVirtualMachineRequest struct {
+
+// DeleteVMRequest contains the configuration for deleting a single virtual machine.
+type DeleteVMRequest struct {
 	Name string `json:"name"`
 }
 
-type DeleteVirtualMachineClusterRequest struct {
-	VirtualMachines []DeleteVirtualMachineRequest `json:"virtual_machines"`
-}
-
-type BaseVirtualMachineCloneInfo struct {
+// BaseVMSpec identifies the base virtual machine to clone from.
+type BaseVMSpec struct {
 	Name string `json:"name"`
 }
-type TargetVirtualMachineCloneInfo struct {
+
+// TargetVMSpec contains the configuration for a cloned virtual machine.
+// BaseImagePath is populated internally from the base VM's disk and is not part of the API.
+type TargetVMSpec struct {
 	Name          string `json:"name"`
 	VCPU          int    `json:"vcpu"`
 	MemoryMB      int64  `json:"memory_mb"`
 	DiskPath      string `json:"disk_path"`
 	DiskSizeGB    int64  `json:"disk_size_gb"`
-	BaseImagePath string `json:"base_image_path"`
+	BaseImagePath string `json:"-"`
 }
 
-type CloneVirtualMachineClusterRequest struct {
-	BaseVirtualMachine    BaseVirtualMachineCloneInfo     `json:"base_virtual_machine"`
-	TargetVirtualMachines []TargetVirtualMachineCloneInfo `json:"target_virtual_machines"`
-}

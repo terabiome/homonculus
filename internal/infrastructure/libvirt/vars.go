@@ -11,3 +11,4 @@ type LibvirtTemplateVars struct {
 	DiskPath               string
 	CloudInitISOPath       string
 }
+

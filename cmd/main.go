@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/terabiome/homonculus/internal/cloudinit"
+	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/internal/config"
-	"github.com/terabiome/homonculus/internal/contracts"
-	"github.com/terabiome/homonculus/internal/disk"
-	"github.com/terabiome/homonculus/internal/libvirt"
-	"github.com/terabiome/homonculus/internal/provisioner"
+	"github.com/terabiome/homonculus/internal/infrastructure/cloudinit"
+	"github.com/terabiome/homonculus/internal/infrastructure/disk"
+	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
+	"github.com/terabiome/homonculus/internal/service"
 	"github.com/terabiome/homonculus/pkg/constants"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"github.com/terabiome/homonculus/pkg/logger"
@@ -85,7 +85,7 @@ func main() {
 						Name:  "create",
 						Usage: "Create virtual machine(s)",
 						Action: func(cliCtx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg, log)
+							vmService, err := initVMService(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -101,14 +101,17 @@ func main() {
 							}
 							defer f.Close()
 
-							var clusterRequest contracts.CreateVirtualMachineClusterRequest
+							var clusterRequest api.CreateClusterRequest
 							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
 								return err
 							}
 
 							log.Info("creating VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
-							if err := provisionerService.CreateCluster(ctx, clusterRequest); err != nil {
+							// Adapt CLI contract to service params
+							vmParams := adaptCreateCluster(clusterRequest)
+
+							if err := vmService.CreateCluster(ctx, vmParams); err != nil {
 								return fmt.Errorf("unable to create virtual machines from template data: %w", err)
 							}
 
@@ -120,7 +123,7 @@ func main() {
 						Name:  "delete",
 						Usage: "Delete virtual machine(s)",
 						Action: func(cliCtx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg, log)
+							vmService, err := initVMService(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -136,14 +139,17 @@ func main() {
 							}
 							defer f.Close()
 
-							var clusterRequest contracts.DeleteVirtualMachineClusterRequest
+							var clusterRequest api.DeleteClusterRequest
 							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
 								return err
 							}
 
 							log.Info("deleting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
-							if err := provisionerService.DeleteCluster(ctx, clusterRequest); err != nil {
+							// Adapt CLI contract to service params
+							vmParams := adaptDeleteCluster(clusterRequest)
+
+							if err := vmService.DeleteCluster(ctx, vmParams); err != nil {
 								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
 							}
 
@@ -155,7 +161,7 @@ func main() {
 						Name:  "clone",
 						Usage: "Clone virtual machine(s)",
 						Action: func(cliCtx *cli.Context) error {
-							provisionerService, err := initProvisioner(cfg, log)
+							vmService, err := initVMService(cfg, log)
 							if err != nil {
 								return err
 							}
@@ -171,17 +177,20 @@ func main() {
 							}
 							defer f.Close()
 
-							var clusterRequest contracts.CloneVirtualMachineClusterRequest
+							var clusterRequest api.CloneClusterRequest
 							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
 								return err
 							}
 
 							log.Info("cloning VM cluster",
-								slog.String("base", clusterRequest.BaseVirtualMachine.Name),
-								slog.Int("count", len(clusterRequest.TargetVirtualMachines)),
+								slog.String("base", clusterRequest.BaseVM.Name),
+								slog.Int("count", len(clusterRequest.TargetVMs)),
 							)
 
-							if err := provisionerService.CloneCluster(ctx, clusterRequest); err != nil {
+							// Adapt CLI contract to service params
+							cloneParams := adaptCloneCluster(clusterRequest)
+
+							if err := vmService.CloneCluster(ctx, cloneParams); err != nil {
 								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
 							}
 
@@ -200,7 +209,7 @@ func main() {
 	}
 }
 
-func initProvisioner(cfg *config.Config, log *slog.Logger) (*provisioner.Service, error) {
+func initVMService(cfg *config.Config, log *slog.Logger) (*service.VMService, error) {
 	engine := templator.NewEngine()
 
 	log.Debug("loading templates")
@@ -233,10 +242,10 @@ func initProvisioner(cfg *config.Config, log *slog.Logger) (*provisioner.Service
 	}
 	log.Info("connection manager initialized")
 
-	return provisioner.NewService(
-		disk.NewService(log),
-		cloudinit.NewService(engine, log),
-		libvirt.NewService(engine, log),
+	return service.NewVMService(
+		disk.NewManager(log),
+		cloudinit.NewManager(engine, log),
+		libvirt.NewManager(engine, log),
 		connManager,
 		log,
 	), nil

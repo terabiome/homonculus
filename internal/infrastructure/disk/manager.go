@@ -7,22 +7,26 @@ import (
 	"path"
 	"strings"
 
-	"github.com/terabiome/homonculus/internal/contracts"
+	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/runtime"
 	"github.com/terabiome/homonculus/pkg/executor/qemuimg"
 )
 
-type Service struct {
+// Manager manages disk operations.
+type Manager struct {
 	logger *slog.Logger
 }
 
-func NewService(logger *slog.Logger) *Service {
-	return &Service{
-		logger: logger.With(slog.String("service", "disk")),
+// NewManager creates a new disk manager.
+func NewManager(logger *slog.Logger) *Manager {
+	return &Manager{
+		logger: logger.With(slog.String("component", "disk")),
 	}
 }
 
-func (s *Service) CreateDisk(ctx context.Context, hypervisor contracts.HypervisorContext, req contracts.CreateVirtualMachineRequest) error {
-	s.logger.Debug("creating qcow2 disk",
+// CreateDisk creates a QCOW2 disk with a backing file.
+func (m *Manager) CreateDisk(ctx context.Context, hypervisor runtime.HypervisorContext, req api.CreateVMRequest) error {
+	m.logger.Debug("creating qcow2 disk",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),
 		slog.Int64("size_gb", req.DiskSizeGB),
@@ -46,7 +50,7 @@ func (s *Service) CreateDisk(ctx context.Context, hypervisor contracts.Hyperviso
 		return err
 	}
 
-	s.logger.Info("created qcow2 disk",
+	m.logger.Info("created qcow2 disk",
 		slog.String("path", req.DiskPath),
 		slog.Int64("size_gb", req.DiskSizeGB),
 	)
@@ -54,8 +58,9 @@ func (s *Service) CreateDisk(ctx context.Context, hypervisor contracts.Hyperviso
 	return nil
 }
 
-func (s *Service) CreateDiskForClone(ctx context.Context, hypervisor contracts.HypervisorContext, req contracts.TargetVirtualMachineCloneInfo) error {
-	s.logger.Debug("creating qcow2 disk for clone",
+// CreateDiskForClone creates a QCOW2 disk for cloning operations.
+func (m *Manager) CreateDiskForClone(ctx context.Context, hypervisor runtime.HypervisorContext, req api.TargetVMSpec) error {
+	m.logger.Debug("creating qcow2 disk for clone",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),
 		slog.Int64("size_gb", req.DiskSizeGB),
@@ -79,10 +84,11 @@ func (s *Service) CreateDiskForClone(ctx context.Context, hypervisor contracts.H
 		return err
 	}
 
-	s.logger.Info("created qcow2 disk for clone",
+	m.logger.Info("created qcow2 disk for clone",
 		slog.String("path", req.DiskPath),
 		slog.Int64("size_gb", req.DiskSizeGB),
 	)
 
 	return nil
 }
+
