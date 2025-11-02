@@ -2,7 +2,7 @@ package contracts
 
 import "github.com/terabiome/homonculus/pkg/constants"
 
-type VirtualMachineRequest struct {
+type CreateVirtualMachineRequest struct {
 	Name                   string                   `json:"name"`
 	VCPU                   int                      `json:"vcpu"`
 	MemoryMB               int64                    `json:"memory_mb"`
@@ -20,6 +20,14 @@ type UserConfig struct {
 	SSHAuthorizedKeys []string `json:"ssh_authorized_keys"`
 }
 
-type ClusterRequest struct {
-	VirtualMachines []VirtualMachineRequest `json:"virtual_machines"`
+type CreateVirtualMachineClusterRequest struct {
+	VirtualMachines []CreateVirtualMachineRequest `json:"virtual_machines"`
+}
+
+type DeleteVirtualMachineRequest struct {
+	Name string `json:"name"`
+}
+
+type DeleteVirtualMachineClusterRequest struct {
+	VirtualMachines []DeleteVirtualMachineRequest `json:"virtual_machines"`
 }

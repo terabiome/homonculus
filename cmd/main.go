@@ -59,7 +59,7 @@ func main() {
 
 							f, _ := os.Open(filepath)
 
-							var clusterRequest contracts.ClusterRequest
+							var clusterRequest contracts.CreateVirtualMachineClusterRequest
 							err = json.NewDecoder(f).Decode(&clusterRequest)
 
 							err := provisionerService.CreateCluster(clusterRequest)
@@ -81,7 +81,7 @@ func main() {
 
 							f, _ := os.Open(filepath)
 
-							var clusterRequest contracts.ClusterRequest
+							var clusterRequest contracts.DeleteVirtualMachineClusterRequest
 							err = json.NewDecoder(f).Decode(&clusterRequest)
 
 							err := provisionerService.DeleteCluster(clusterRequest)

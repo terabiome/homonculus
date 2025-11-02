@@ -18,7 +18,7 @@ func NewService(ciTemplator *templator.CloudInitTemplator) *Service {
 	return &Service{ciTemplator}
 }
 
-func (svc *Service) CreateISO(vmRequest contracts.VirtualMachineRequest) error {
+func (svc *Service) CreateISO(vmRequest contracts.CreateVirtualMachineRequest) error {
 	dirPath := path.Dir(vmRequest.CloudInitISOPath)
 
 	if err := os.MkdirAll(dirPath, 0o755); err != nil {
@@ -48,7 +48,7 @@ func (svc *Service) CreateISO(vmRequest contracts.VirtualMachineRequest) error {
 	return nil
 }
 
-func (svc *Service) createUserData(diskpath string, vmRequest contracts.VirtualMachineRequest) error {
+func (svc *Service) createUserData(diskpath string, vmRequest contracts.CreateVirtualMachineRequest) error {
 	placeholder := templator.CloudInitTemplatePlaceholder{
 		Hostname:    vmRequest.Name,
 		UserConfigs: vmRequest.UserConfigs,
