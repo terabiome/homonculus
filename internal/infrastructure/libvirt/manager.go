@@ -29,7 +29,7 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 	}
 }
 
-// CreateVirtualMachine creates and starts a virtual machine.
+// CreateVirtualMachine creates a virtual machine without starting it.
 func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
 	vars := LibvirtTemplateVars{
 		Name:                   request.Name,
@@ -47,14 +47,25 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 	}
 	m.logger.Debug("rendered libvirt XML", slog.String("vm", request.Name))
 
-	domain, err := hypervisor.Conn.DomainDefineXML(string(bytes))
+	_, err = hypervisor.Conn.DomainDefineXML(string(bytes))
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
-	m.logger.Debug("defined VM in libvirt", slog.String("vm", request.Name))
+	m.logger.Info("defined VM in libvirt", slog.String("vm", request.Name))
+
+	return nil
+}
+
+// StartVirtualMachine starts a virtual machine by name.
+func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.StartVMRequest) error {
+	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
+	if err != nil {
+		return fmt.Errorf("could not look up VM by name: %w", err)
+	}
+	m.logger.Debug("found VM", slog.String("vm", request.Name))
 
 	if err = domain.Create(); err != nil {
-		return fmt.Errorf("could not start VM from Libvirt XML: %w", err)
+		return fmt.Errorf("could not start VM: %w", err)
 	}
 	m.logger.Info("started VM", slog.String("vm", request.Name))
 
@@ -91,7 +102,7 @@ func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor runtime.H
 			slog.String("type", disk.Driver.Type),
 			slog.String("path", disk.Source.File.File),
 		)
-		
+
 		if err := fileops.RemoveFile(ctx, hypervisor.Executor, disk.Source.File.File); err != nil {
 			m.logger.Warn("failed to delete disk",
 				slog.String("vm", request.Name),
@@ -117,15 +128,8 @@ func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor runtime.H
 }
 
 // FindVirtualMachine looks up a virtual machine by name.
-func (m *Manager) FindVirtualMachine(name string) (*libvirt.Domain, error) {
-	conn, err := libvirt.NewConnect("qemu:///system")
-	if err != nil {
-		return nil, fmt.Errorf("could not connect to hypervisor: %w", err)
-	}
-	defer conn.Close()
-	m.logger.Debug("connected to hypervisor")
-
-	domain, err := conn.LookupDomainByName(name)
+func (m *Manager) FindVirtualMachine(hypervisor runtime.HypervisorContext, name string) (*libvirt.Domain, error) {
+	domain, err := hypervisor.Conn.LookupDomainByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("could not look up VM by name: %w", err)
 	}
@@ -135,14 +139,8 @@ func (m *Manager) FindVirtualMachine(name string) (*libvirt.Domain, error) {
 }
 
 // CheckVirtualMachineExistence checks if a VM exists.
-func (m *Manager) CheckVirtualMachineExistence(name string) (bool, error) {
-	conn, err := libvirt.NewConnect("qemu:///system")
-	if err != nil {
-		return false, fmt.Errorf("could not connect to hypervisor: %w", err)
-	}
-	defer conn.Close()
-
-	_, err = conn.LookupDomainByName(name)
+func (m *Manager) CheckVirtualMachineExistence(hypervisor runtime.HypervisorContext, name string) (bool, error) {
+	_, err := hypervisor.Conn.LookupDomainByName(name)
 	if err != nil {
 		if err.(libvirt.Error).Code == libvirt.ERR_NO_DOMAIN {
 			return false, nil
@@ -170,7 +168,7 @@ func (m *Manager) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error
 	return domainXML, nil
 }
 
-// CloneVirtualMachine clones a VM from a base domain XML.
+// CloneVirtualMachine clones a VM from a base domain XML without starting it.
 func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo api.TargetVMSpec, virtualMachineUUID uuid.UUID) error {
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
@@ -193,17 +191,11 @@ func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor runtime.Hy
 		return fmt.Errorf("could not serialize Libvirt XML to string: %w", err)
 	}
 
-	domain, err := hypervisor.Conn.DomainDefineXML(newDomainXMLString)
+	_, err = hypervisor.Conn.DomainDefineXML(newDomainXMLString)
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
-	m.logger.Debug("defined cloned VM in libvirt", slog.String("vm", targetInfo.Name))
-
-	if err = domain.Create(); err != nil {
-		return fmt.Errorf("could not start VM from Libvirt XML: %w", err)
-	}
-	m.logger.Info("started cloned VM", slog.String("vm", targetInfo.Name))
+	m.logger.Info("defined cloned VM in libvirt", slog.String("vm", targetInfo.Name))
 
 	return nil
 }
-

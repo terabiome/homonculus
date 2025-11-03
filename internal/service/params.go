@@ -19,6 +19,11 @@ type DeleteVMParams struct {
 	Name string
 }
 
+// StartVMParams contains transport-agnostic parameters for starting a virtual machine.
+type StartVMParams struct {
+	Name string
+}
+
 // CloneVMParams contains transport-agnostic parameters for cloning virtual machines.
 type CloneVMParams struct {
 	BaseVMName  string

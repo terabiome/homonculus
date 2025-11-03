@@ -41,6 +41,17 @@ func adaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
 	return params
 }
 
+// adaptStartCluster converts CLI contract to service params
+func adaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
+	params := make([]service.StartVMParams, len(req.VirtualMachines))
+	for i, vm := range req.VirtualMachines {
+		params[i] = service.StartVMParams{
+			Name: vm.Name,
+		}
+	}
+	return params
+}
+
 // adaptCloneCluster converts CLI contract to service params
 func adaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	targetSpecs := make([]service.TargetVMSpec, len(req.TargetVMs))

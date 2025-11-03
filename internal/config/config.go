@@ -14,6 +14,7 @@ type Config struct {
 	CloudInitNetworkConfigTemplate string
 	LogLevel                       string
 	LogFormat                      string
+	TelemetryEnabled               bool
 }
 
 func Load() (*Config, error) {
@@ -35,6 +36,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("cloudinit_network_config_template", "./templates/cloudinit/network-config.tpl")
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
+	viper.SetDefault("telemetry_enabled", false)
 
 	viper.SetEnvPrefix("homonculus")
 	viper.AutomaticEnv()
@@ -46,6 +48,7 @@ func Load() (*Config, error) {
 		CloudInitNetworkConfigTemplate: viper.GetString("cloudinit_network_config_template"),
 		LogLevel:                       viper.GetString("log_level"),
 		LogFormat:                      viper.GetString("log_format"),
+		TelemetryEnabled:               viper.GetBool("telemetry_enabled"),
 	}
 
 	if err := cfg.Validate(); err != nil {

@@ -42,22 +42,29 @@ func main() {
 	log.Info("homonculus starting",
 		slog.String("log_level", cfg.LogLevel),
 		slog.String("log_format", cfg.LogFormat),
+		slog.Bool("telemetry_enabled", cfg.TelemetryEnabled),
 	)
 
-	tel, err := telemetry.Initialize("homonculus")
-	if err != nil {
-		log.Error("failed to initialize telemetry", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	defer func() {
-		log.Info("shutting down telemetry")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		if err := tel.Shutdown(shutdownCtx); err != nil {
-			log.Error("failed to shutdown telemetry", slog.String("error", err.Error()))
+	var tel *telemetry.Telemetry
+	if cfg.TelemetryEnabled {
+		var err error
+		tel, err = telemetry.Initialize("homonculus")
+		if err != nil {
+			log.Error("failed to initialize telemetry", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
-	}()
-	log.Info("telemetry initialized")
+		defer func() {
+			log.Info("shutting down telemetry")
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			if err := tel.Shutdown(shutdownCtx); err != nil {
+				log.Error("failed to shutdown telemetry", slog.String("error", err.Error()))
+			}
+		}()
+		log.Info("telemetry initialized")
+	} else {
+		log.Debug("telemetry disabled")
+	}
 
 	go func() {
 		sig := <-sigChan
@@ -84,6 +91,14 @@ func main() {
 					{
 						Name:  "create",
 						Usage: "Create virtual machine(s)",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:    "start",
+								Aliases: []string{"s"},
+								Usage:   "Start VMs after creation",
+								Value:   false,
+							},
+						},
 						Action: func(cliCtx *cli.Context) error {
 							vmService, err := initVMService(cfg, log)
 							if err != nil {
@@ -111,11 +126,32 @@ func main() {
 							// Adapt CLI contract to service params
 							vmParams := adaptCreateCluster(clusterRequest)
 
+							// Prepare start params if flag is set
+							var startVMs []service.StartVMParams
+							if cliCtx.Bool("start") {
+								startVMs = make([]service.StartVMParams, len(clusterRequest.VirtualMachines))
+								for i, vm := range clusterRequest.VirtualMachines {
+									startVMs[i] = service.StartVMParams{Name: vm.Name}
+								}
+							}
+
 							if err := vmService.CreateCluster(ctx, vmParams); err != nil {
 								return fmt.Errorf("unable to create virtual machines from template data: %w", err)
 							}
 
 							log.Info("VM cluster created successfully")
+
+							// Start VMs if we prepared the list
+							if len(startVMs) > 0 {
+								log.Info("starting VM cluster", slog.Int("count", len(startVMs)))
+
+								if err := vmService.StartCluster(ctx, startVMs); err != nil {
+									return fmt.Errorf("unable to start virtual machines: %w", err)
+								}
+
+								log.Info("VM cluster started successfully")
+							}
+
 							return nil
 						},
 					},
@@ -154,6 +190,44 @@ func main() {
 							}
 
 							log.Info("VM cluster deleted successfully")
+							return nil
+						},
+					},
+					{
+						Name:  "start",
+						Usage: "Start virtual machine(s)",
+						Action: func(cliCtx *cli.Context) error {
+							vmService, err := initVMService(cfg, log)
+							if err != nil {
+								return err
+							}
+
+							filepath := cliCtx.Args().First()
+							if filepath == "" {
+								return errors.New("empty file path to virtualmachine config")
+							}
+
+							f, err := os.Open(filepath)
+							if err != nil {
+								return err
+							}
+							defer f.Close()
+
+							var clusterRequest api.StartClusterRequest
+							if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
+								return err
+							}
+
+							log.Info("starting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
+
+							// Adapt CLI contract to service params
+							vmParams := adaptStartCluster(clusterRequest)
+
+							if err := vmService.StartCluster(ctx, vmParams); err != nil {
+								return fmt.Errorf("unable to start virtual machines from template data: %w", err)
+							}
+
+							log.Info("VM cluster started successfully")
 							return nil
 						},
 					},

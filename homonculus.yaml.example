@@ -10,6 +10,9 @@
 log_level: info  # debug, info, warn, error
 log_format: text # text, json
 
+# Telemetry configuration
+telemetry_enabled: false # true to enable OpenTelemetry tracing and metrics
+
 # Template paths
 libvirt_template: ./templates/libvirt/domain.xml.tpl
 cloudinit_user_data_template: ./templates/cloudinit/user-data.tpl

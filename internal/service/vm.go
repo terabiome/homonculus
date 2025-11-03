@@ -133,7 +133,7 @@ func (s *VMService) CreateCluster(ctx context.Context, vms []CreateVMParams) err
 
 		virtualMachineUUID := uuid.New()
 
-		exists, err := s.libvirtManager.CheckVirtualMachineExistence(vm.Name)
+		exists, err := s.libvirtManager.CheckVirtualMachineExistence(hypervisor, vm.Name)
 		if err != nil {
 			s.logger.Error("failed to check if VM exists",
 				slog.String("vm", vm.Name),
@@ -294,6 +294,46 @@ func (s *VMService) DeleteCluster(ctx context.Context, vms []DeleteVMParams) err
 	return nil
 }
 
+// StartCluster starts multiple VMs.
+func (s *VMService) StartCluster(ctx context.Context, vms []StartVMParams) error {
+	conn, exec, unlock, err := s.connManager.GetHypervisor()
+	if err != nil {
+		return fmt.Errorf("failed to get hypervisor connection: %w", err)
+	}
+	defer unlock()
+
+	hypervisor := runtime.HypervisorContext{
+		URI:      "qemu:///system",
+		Conn:     conn,
+		Executor: exec,
+	}
+
+	var failedVMs []string
+
+	for _, vm := range vms {
+		s.logger.Info("starting VM", slog.String("vm", vm.Name))
+
+		// Convert service params to infrastructure contract
+		startReq := s.toStartVMRequest(vm)
+
+		if err := s.libvirtManager.StartVirtualMachine(ctx, hypervisor, startReq); err != nil {
+			s.logger.Error("failed to start VM",
+				slog.String("vm", vm.Name),
+				slog.String("error", err.Error()),
+			)
+			failedVMs = append(failedVMs, vm.Name)
+			continue
+		}
+
+		s.logger.Info("successfully started VM", slog.String("vm", vm.Name))
+	}
+
+	if len(failedVMs) > 0 {
+		return fmt.Errorf("failed to start %d VM(s): %v", len(failedVMs), failedVMs)
+	}
+	return nil
+}
+
 // CloneCluster clones a base VM into multiple target VMs.
 func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) error {
 	conn, exec, unlock, err := s.connManager.GetHypervisor()
@@ -310,7 +350,7 @@ func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) erro
 
 	s.logger.Info("finding base VM for cloning", slog.String("base_vm", params.BaseVMName))
 
-	baseDomain, err := s.libvirtManager.FindVirtualMachine(params.BaseVMName)
+	baseDomain, err := s.libvirtManager.FindVirtualMachine(hypervisor, params.BaseVMName)
 	if err != nil {
 		s.logger.Error("failed to find base VM",
 			slog.String("base_vm", params.BaseVMName),
@@ -454,6 +494,12 @@ func (s *VMService) toDeleteVMRequest(params DeleteVMParams) api.DeleteVMRequest
 	}
 }
 
+func (s *VMService) toStartVMRequest(params StartVMParams) api.StartVMRequest {
+	return api.StartVMRequest{
+		Name: params.Name,
+	}
+}
+
 func (s *VMService) toTargetVMSpec(spec TargetVMSpec) api.TargetVMSpec {
 	return api.TargetVMSpec{
 		Name:          spec.Name,
@@ -464,4 +510,3 @@ func (s *VMService) toTargetVMSpec(spec TargetVMSpec) api.TargetVMSpec {
 		BaseImagePath: spec.BaseImagePath,
 	}
 }
-

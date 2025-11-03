@@ -17,7 +17,12 @@ type Telemetry struct {
 }
 
 func Initialize(serviceName string) (*Telemetry, error) {
-	traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	opts := []stdouttrace.Option{
+		stdouttrace.WithPrettyPrint(),
+	}
+
+	traceExporter, err := stdouttrace.New(opts...)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
@@ -54,4 +59,3 @@ func (t *Telemetry) Shutdown(ctx context.Context) error {
 
 	return nil
 }
-

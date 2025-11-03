@@ -21,6 +21,11 @@ type DeleteVMRequest struct {
 	Name string `json:"name"`
 }
 
+// StartVMRequest contains the configuration for starting a single virtual machine.
+type StartVMRequest struct {
+	Name string `json:"name"`
+}
+
 // BaseVMSpec identifies the base virtual machine to clone from.
 type BaseVMSpec struct {
 	Name string `json:"name"`
