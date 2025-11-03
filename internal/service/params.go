@@ -69,4 +69,5 @@ type TargetVMSpec struct {
 type UserConfig struct {
 	Username          string
 	SSHAuthorizedKeys []string
+	Password          string
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -30,9 +31,12 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 
 // CreateISO creates a cloud-init ISO from templates.
 func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorContext, vmRequest api.CreateVMRequest, instanceID uuid.UUID) error {
-	dirPath := filepath.Dir(vmRequest.CloudInitISOPath)
+	tempDir, err := os.MkdirTemp("", fmt.Sprintf("cloud-init-%s-", vmRequest.Name))
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir for cloud-init: %w", err)
+	}
 
-	userDataPath := filepath.Join(dirPath, "user-data")
+	userDataPath := filepath.Join(tempDir, "user-data")
 	if err := m.renderUserData(userDataPath, vmRequest); err != nil {
 		return fmt.Errorf("failed to render user-data: %w", err)
 	}
@@ -41,7 +45,7 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 	isoFiles := []string{userDataPath}
 
 	if m.engine.HasTemplate(constants.TemplateCloudInitMetaData) {
-		metaDataPath := filepath.Join(dirPath, "meta-data")
+		metaDataPath := filepath.Join(tempDir, "meta-data")
 		if err := m.renderMetaData(metaDataPath, vmRequest, instanceID); err != nil {
 			return fmt.Errorf("failed to render meta-data: %w", err)
 		}
@@ -50,7 +54,7 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 	}
 
 	if m.engine.HasTemplate(constants.TemplateCloudInitNetworkConfig) {
-		networkConfigPath := filepath.Join(dirPath, "network-config")
+		networkConfigPath := filepath.Join(tempDir, "network-config")
 		if err := m.renderNetworkConfig(networkConfigPath, vmRequest); err != nil {
 			return fmt.Errorf("failed to render network-config: %w", err)
 		}
@@ -58,7 +62,7 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 		m.logger.Debug("rendered network-config", slog.String("vm", vmRequest.Name))
 	}
 
-	err := mkisofs.CreateISO(ctx, hypervisor.Executor, mkisofs.ISOOptions{
+	err = mkisofs.CreateISO(ctx, hypervisor.Executor, mkisofs.ISOOptions{
 		OutputPath: vmRequest.CloudInitISOPath,
 		VolumeID:   "cidata",
 		Files:      isoFiles,
@@ -102,4 +106,3 @@ func (m *Manager) renderNetworkConfig(path string, vmRequest api.CreateVMRequest
 
 	return m.engine.RenderToFile(constants.TemplateCloudInitNetworkConfig, path, vars)
 }
-

@@ -4,5 +4,5 @@ package api
 type UserConfig struct {
 	Username          string   `json:"username"`
 	SSHAuthorizedKeys []string `json:"ssh_authorized_keys"`
+	Password          string   `json:"passwd"`
 }
-

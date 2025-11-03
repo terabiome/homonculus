@@ -117,8 +117,8 @@ func adaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
 		result[i] = service.UserConfig{
 			Username:          c.Username,
 			SSHAuthorizedKeys: c.SSHAuthorizedKeys,
+			Password:          c.Password,
 		}
 	}
 	return result
 }
-

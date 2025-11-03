@@ -537,6 +537,7 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 		userConfigs[i] = api.UserConfig{
 			Username:          uc.Username,
 			SSHAuthorizedKeys: uc.SSHAuthorizedKeys,
+			Password:          uc.Password,
 		}
 	}
 
