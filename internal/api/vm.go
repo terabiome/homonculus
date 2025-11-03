@@ -26,6 +26,31 @@ type StartVMRequest struct {
 	Name string `json:"name"`
 }
 
+// QueryVMRequest contains the configuration for querying a single virtual machine.
+type QueryVMRequest struct {
+	Name string `json:"name"`
+}
+
+// DiskInfo contains information about a VM disk.
+type DiskInfo struct {
+	Path   string `json:"path"`
+	Type   string `json:"type"`   // e.g., "qcow2", "raw"
+	Device string `json:"device"` // e.g., "disk", "cdrom"
+	SizeGB int64  `json:"size_gb,omitempty"`
+}
+
+// VMInfo contains detailed information about a virtual machine.
+type VMInfo struct {
+	Name       string     `json:"name"`
+	UUID       string     `json:"uuid"`
+	State      string     `json:"state"` // running, stopped, paused, etc.
+	VCPU       uint       `json:"vcpu"`
+	MemoryMB   uint       `json:"memory_mb"`
+	Disks      []DiskInfo `json:"disks"`
+	AutoStart  bool       `json:"autostart"`
+	Persistent bool       `json:"persistent"`
+}
+
 // BaseVMSpec identifies the base virtual machine to clone from.
 type BaseVMSpec struct {
 	Name string `json:"name"`
@@ -41,4 +66,3 @@ type TargetVMSpec struct {
 	DiskSizeGB    int64  `json:"disk_size_gb"`
 	BaseImagePath string `json:"-"`
 }
-

@@ -72,6 +72,138 @@ func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor runtime.Hy
 	return nil
 }
 
+// GetVirtualMachineInfo retrieves detailed information about a virtual machine.
+func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.HypervisorContext, request api.QueryVMRequest) (api.VMInfo, error) {
+	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
+	if err != nil {
+		return api.VMInfo{}, fmt.Errorf("could not look up VM by name: %w", err)
+	}
+
+	// Get UUID
+	uuidStr, err := domain.GetUUIDString()
+	if err != nil {
+		return api.VMInfo{}, fmt.Errorf("could not get VM UUID: %w", err)
+	}
+
+	// Get state
+	state, _, err := domain.GetState()
+	if err != nil {
+		return api.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
+	}
+	stateStr := domainStateToString(state)
+
+	// Get XML description
+	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
+	if err != nil {
+		return api.VMInfo{}, fmt.Errorf("could not read domain XML: %w", err)
+	}
+
+	domainXML := libvirtxml.Domain{}
+	if err = domainXML.Unmarshal(domainXMLString); err != nil {
+		return api.VMInfo{}, fmt.Errorf("could not parse domain XML: %w", err)
+	}
+
+	// Extract disk information
+	var disks []api.DiskInfo
+	for _, disk := range domainXML.Devices.Disks {
+		if disk.Source != nil && disk.Source.File != nil {
+			diskInfo := api.DiskInfo{
+				Path:   disk.Source.File.File,
+				Device: disk.Device,
+			}
+			if disk.Driver != nil {
+				diskInfo.Type = disk.Driver.Type
+			}
+			// Note: Getting actual disk size would require additional system calls
+			// We could use qemu-img info, but that's outside libvirt scope
+			disks = append(disks, diskInfo)
+		}
+	}
+
+	// Get autostart status
+	autoStart, err := domain.GetAutostart()
+	if err != nil {
+		m.logger.Warn("could not get autostart status", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		autoStart = false
+	}
+
+	// Check if persistent
+	persistent, err := domain.IsPersistent()
+	if err != nil {
+		m.logger.Warn("could not get persistent status", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		persistent = false
+	}
+
+	vmInfo := api.VMInfo{
+		Name:       request.Name,
+		UUID:       uuidStr,
+		State:      stateStr,
+		VCPU:       domainXML.VCPU.Value,
+		MemoryMB:   domainXML.CurrentMemory.Value / 1024, // Convert from KiB to MiB
+		Disks:      disks,
+		AutoStart:  autoStart,
+		Persistent: persistent,
+	}
+
+	m.logger.Debug("retrieved VM info", slog.String("vm", request.Name), slog.String("state", stateStr))
+
+	return vmInfo, nil
+}
+
+// ListAllVirtualMachines retrieves information about all virtual machines.
+func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor runtime.HypervisorContext) ([]api.VMInfo, error) {
+	// List all domains (both active and inactive)
+	domains, err := hypervisor.Conn.ListAllDomains(libvirt.CONNECT_LIST_DOMAINS_ACTIVE | libvirt.CONNECT_LIST_DOMAINS_INACTIVE)
+	if err != nil {
+		return nil, fmt.Errorf("could not list domains: %w", err)
+	}
+
+	var vmInfos []api.VMInfo
+	for _, domain := range domains {
+		name, err := domain.GetName()
+		if err != nil {
+			m.logger.Warn("could not get domain name", slog.String("error", err.Error()))
+			continue
+		}
+
+		vmInfo, err := m.GetVirtualMachineInfo(ctx, hypervisor, api.QueryVMRequest{Name: name})
+		if err != nil {
+			m.logger.Warn("could not get VM info", slog.String("vm", name), slog.String("error", err.Error()))
+			continue
+		}
+
+		vmInfos = append(vmInfos, vmInfo)
+	}
+
+	m.logger.Debug("listed all VMs", slog.Int("count", len(vmInfos)))
+
+	return vmInfos, nil
+}
+
+// domainStateToString converts libvirt domain state to a readable string.
+func domainStateToString(state libvirt.DomainState) string {
+	switch state {
+	case libvirt.DOMAIN_NOSTATE:
+		return "no-state"
+	case libvirt.DOMAIN_RUNNING:
+		return "running"
+	case libvirt.DOMAIN_BLOCKED:
+		return "blocked"
+	case libvirt.DOMAIN_PAUSED:
+		return "paused"
+	case libvirt.DOMAIN_SHUTDOWN:
+		return "shutdown"
+	case libvirt.DOMAIN_SHUTOFF:
+		return "shutoff"
+	case libvirt.DOMAIN_CRASHED:
+		return "crashed"
+	case libvirt.DOMAIN_PMSUSPENDED:
+		return "suspended"
+	default:
+		return "unknown"
+	}
+}
+
 // DeleteVirtualMachine stops and removes a virtual machine.
 func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.DeleteVMRequest) (string, error) {
 	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)

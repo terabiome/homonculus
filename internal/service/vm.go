@@ -334,6 +334,72 @@ func (s *VMService) StartCluster(ctx context.Context, vms []StartVMParams) error
 	return nil
 }
 
+// QueryCluster queries information about multiple VMs.
+// If vms is empty, it lists all VMs. Otherwise, it queries specific VMs.
+func (s *VMService) QueryCluster(ctx context.Context, vms []QueryVMParams) ([]VMInfo, error) {
+	conn, exec, unlock, err := s.connManager.GetHypervisor()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hypervisor connection: %w", err)
+	}
+	defer unlock()
+
+	hypervisor := runtime.HypervisorContext{
+		URI:      "qemu:///system",
+		Conn:     conn,
+		Executor: exec,
+	}
+
+	var vmInfos []VMInfo
+	var failedVMs []string
+
+	// If no VMs specified, list all VMs
+	if len(vms) == 0 {
+		s.logger.Debug("listing all VMs")
+
+		apiVMInfos, err := s.libvirtManager.ListAllVirtualMachines(ctx, hypervisor)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list VMs: %w", err)
+		}
+
+		for _, apiVMInfo := range apiVMInfos {
+			vmInfo := s.fromAPIVMInfo(apiVMInfo)
+			vmInfos = append(vmInfos, vmInfo)
+		}
+
+		s.logger.Info("listed all VMs", slog.Int("count", len(vmInfos)))
+		return vmInfos, nil
+	}
+
+	// Query specific VMs
+	for _, vm := range vms {
+		s.logger.Debug("querying VM", slog.String("vm", vm.Name))
+
+		// Convert service params to infrastructure contract
+		queryReq := s.toQueryVMRequest(vm)
+
+		apiVMInfo, err := s.libvirtManager.GetVirtualMachineInfo(ctx, hypervisor, queryReq)
+		if err != nil {
+			s.logger.Error("failed to query VM",
+				slog.String("vm", vm.Name),
+				slog.String("error", err.Error()),
+			)
+			failedVMs = append(failedVMs, vm.Name)
+			continue
+		}
+
+		// Convert API VMInfo to service VMInfo
+		vmInfo := s.fromAPIVMInfo(apiVMInfo)
+		vmInfos = append(vmInfos, vmInfo)
+
+		s.logger.Debug("successfully queried VM", slog.String("vm", vm.Name), slog.String("state", vmInfo.State))
+	}
+
+	if len(failedVMs) > 0 {
+		return vmInfos, fmt.Errorf("failed to query %d VM(s): %v", len(failedVMs), failedVMs)
+	}
+	return vmInfos, nil
+}
+
 // CloneCluster clones a base VM into multiple target VMs.
 func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) error {
 	conn, exec, unlock, err := s.connManager.GetHypervisor()
@@ -497,6 +563,35 @@ func (s *VMService) toDeleteVMRequest(params DeleteVMParams) api.DeleteVMRequest
 func (s *VMService) toStartVMRequest(params StartVMParams) api.StartVMRequest {
 	return api.StartVMRequest{
 		Name: params.Name,
+	}
+}
+
+func (s *VMService) toQueryVMRequest(params QueryVMParams) api.QueryVMRequest {
+	return api.QueryVMRequest{
+		Name: params.Name,
+	}
+}
+
+func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
+	disks := make([]DiskInfo, len(apiInfo.Disks))
+	for i, d := range apiInfo.Disks {
+		disks[i] = DiskInfo{
+			Path:   d.Path,
+			Type:   d.Type,
+			Device: d.Device,
+			SizeGB: d.SizeGB,
+		}
+	}
+
+	return VMInfo{
+		Name:       apiInfo.Name,
+		UUID:       apiInfo.UUID,
+		State:      apiInfo.State,
+		VCPU:       apiInfo.VCPU,
+		MemoryMB:   apiInfo.MemoryMB,
+		Disks:      disks,
+		AutoStart:  apiInfo.AutoStart,
+		Persistent: apiInfo.Persistent,
 	}
 }
 

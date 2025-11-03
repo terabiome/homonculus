@@ -52,6 +52,44 @@ func adaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
 	return params
 }
 
+// adaptQueryCluster converts CLI contract to service params
+func adaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
+	params := make([]service.QueryVMParams, len(req.VirtualMachines))
+	for i, vm := range req.VirtualMachines {
+		params[i] = service.QueryVMParams{
+			Name: vm.Name,
+		}
+	}
+	return params
+}
+
+// adaptVMInfoToAPI converts service VMInfo to API VMInfo
+func adaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
+	result := make([]api.VMInfo, len(vmInfos))
+	for i, info := range vmInfos {
+		disks := make([]api.DiskInfo, len(info.Disks))
+		for j, d := range info.Disks {
+			disks[j] = api.DiskInfo{
+				Path:   d.Path,
+				Type:   d.Type,
+				Device: d.Device,
+				SizeGB: d.SizeGB,
+			}
+		}
+		result[i] = api.VMInfo{
+			Name:       info.Name,
+			UUID:       info.UUID,
+			State:      info.State,
+			VCPU:       info.VCPU,
+			MemoryMB:   info.MemoryMB,
+			Disks:      disks,
+			AutoStart:  info.AutoStart,
+			Persistent: info.Persistent,
+		}
+	}
+	return result
+}
+
 // adaptCloneCluster converts CLI contract to service params
 func adaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	targetSpecs := make([]service.TargetVMSpec, len(req.TargetVMs))

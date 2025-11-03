@@ -232,6 +232,60 @@ func main() {
 						},
 					},
 					{
+						Name:  "query",
+						Usage: "Query virtual machine(s) information. Omit file path to list all VMs.",
+						Action: func(cliCtx *cli.Context) error {
+							vmService, err := initVMService(cfg, log)
+							if err != nil {
+								return err
+							}
+
+							filepath := cliCtx.Args().First()
+
+							var vmParams []service.QueryVMParams
+
+							// If filepath provided, query specific VMs
+							if filepath != "" {
+								f, err := os.Open(filepath)
+								if err != nil {
+									return err
+								}
+								defer f.Close()
+
+								var clusterRequest api.QueryClusterRequest
+								if err := json.NewDecoder(f).Decode(&clusterRequest); err != nil {
+									return err
+								}
+
+								log.Info("querying VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
+								vmParams = adaptQueryCluster(clusterRequest)
+							} else {
+								// No filepath provided, list all VMs
+								log.Info("listing all VMs")
+								vmParams = nil // Empty slice will trigger list all
+							}
+
+							vmInfos, err := vmService.QueryCluster(ctx, vmParams)
+							if err != nil {
+								log.Warn("some VMs failed to query", slog.String("error", err.Error()))
+							}
+
+							// Convert service VMInfo to API VMInfo
+							response := api.QueryClusterResponse{
+								VirtualMachines: adaptVMInfoToAPI(vmInfos),
+							}
+
+							// Output as JSON
+							output, err := json.MarshalIndent(response, "", "  ")
+							if err != nil {
+								return fmt.Errorf("unable to marshal response: %w", err)
+							}
+
+							fmt.Println(string(output))
+							return nil
+						},
+					},
+					{
 						Name:  "clone",
 						Usage: "Clone virtual machine(s)",
 						Action: func(cliCtx *cli.Context) error {
