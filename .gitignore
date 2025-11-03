@@ -1,2 +1,6 @@
 **/libvirt-*.xml
 **/virtualmachine-config*.json
+**/k3s-config*.json
+**/homonculus*.yaml
+
+homonculus

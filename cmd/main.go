@@ -18,6 +18,7 @@ import (
 	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
 	"github.com/terabiome/homonculus/internal/service"
 	"github.com/terabiome/homonculus/pkg/constants"
+	"github.com/terabiome/homonculus/pkg/k3s"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"github.com/terabiome/homonculus/pkg/logger"
 	"github.com/terabiome/homonculus/pkg/telemetry"
@@ -324,6 +325,108 @@ func main() {
 
 							log.Info("VM cluster cloned successfully")
 							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:  "k3s",
+				Usage: "K3s cluster management",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "generate-token",
+						Usage: "Generate a secure K3s cluster token",
+						Action: func(cliCtx *cli.Context) error {
+							token, err := k3s.GenerateToken()
+							if err != nil {
+								return fmt.Errorf("failed to generate token: %w", err)
+							}
+							fmt.Println(token)
+							return nil
+						},
+					},
+					{
+						Name:  "bootstrap",
+						Usage: "Bootstrap K3s cluster nodes",
+						Subcommands: []*cli.Command{
+							{
+								Name:  "master",
+								Usage: "Bootstrap K3s master/server node(s)",
+								Action: func(cliCtx *cli.Context) error {
+									filepath := cliCtx.Args().First()
+									if filepath == "" {
+										return errors.New("empty file path to K3s master bootstrap config")
+									}
+
+									f, err := os.Open(filepath)
+									if err != nil {
+										return err
+									}
+									defer f.Close()
+
+									var config api.K3sMasterBootstrapConfig
+									if err := json.NewDecoder(f).Decode(&config); err != nil {
+										return err
+									}
+
+									// Validate token
+									if config.Token == "" {
+										return errors.New("token is required in bootstrap config")
+									}
+
+									log.Info("starting K3s master bootstrap", slog.Int("nodes", len(config.Nodes)))
+
+									bootstrapService := k3s.NewBootstrapService(log)
+									if err := bootstrapService.BootstrapMasters(ctx, config); err != nil {
+										return fmt.Errorf("master bootstrap failed: %w", err)
+									}
+
+									log.Info("K3s master bootstrap completed successfully")
+									return nil
+								},
+							},
+							{
+								Name:  "worker",
+								Usage: "Bootstrap K3s worker/agent node(s)",
+								Action: func(cliCtx *cli.Context) error {
+									filepath := cliCtx.Args().First()
+									if filepath == "" {
+										return errors.New("empty file path to K3s worker bootstrap config")
+									}
+
+									f, err := os.Open(filepath)
+									if err != nil {
+										return err
+									}
+									defer f.Close()
+
+									var config api.K3sWorkerBootstrapConfig
+									if err := json.NewDecoder(f).Decode(&config); err != nil {
+										return err
+									}
+
+									// Validate token and master URL
+									if config.Token == "" {
+										return errors.New("token is required in bootstrap config")
+									}
+									if config.MasterURL == "" {
+										return errors.New("master_url is required in bootstrap config")
+									}
+
+									log.Info("starting K3s worker bootstrap",
+										slog.Int("nodes", len(config.Nodes)),
+										slog.String("master_url", config.MasterURL),
+									)
+
+									bootstrapService := k3s.NewBootstrapService(log)
+									if err := bootstrapService.BootstrapWorkers(ctx, config); err != nil {
+										return fmt.Errorf("worker bootstrap failed: %w", err)
+									}
+
+									log.Info("K3s worker bootstrap completed successfully")
+									return nil
+								},
+							},
 						},
 					},
 				},

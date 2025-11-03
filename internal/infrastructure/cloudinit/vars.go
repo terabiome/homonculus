@@ -19,4 +19,3 @@ type MetaDataTemplateVars struct {
 type NetworkConfigTemplateVars struct {
 	Hostname string
 }
-
