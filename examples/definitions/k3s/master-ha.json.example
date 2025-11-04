@@ -1,0 +1,21 @@
+{
+  "token": "REPLACE_WITH_TOKEN_FROM_homonculus_k3s_generate-token",
+  "nodes": [
+    {
+      "host": "k3s-master-1.local",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519"
+    },
+    {
+      "host": "k3s-master-2.local",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519"
+    },
+    {
+      "host": "k3s-master-3.local",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519"
+    }
+  ]
+}
+

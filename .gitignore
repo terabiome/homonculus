@@ -1,6 +1,14 @@
+# Generated libvirt XML files
 **/libvirt-*.xml
-**/virtualmachine-config*.json
-**/k3s-config*.json
-**/homonculus*.yaml
 
+# User-specific homelab definitions
+definitions/homelab/
+
+# Keep .gitkeep file in homelab
+!definitions/homelab/**/.gitkeep
+
+# Local config
+homonculus.yaml
+
+# Binary
 homonculus

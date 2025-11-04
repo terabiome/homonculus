@@ -467,11 +467,11 @@ func initVMService(cfg *config.Config, log *slog.Logger) (*service.VMService, er
 
 	log.Debug("templates loaded successfully")
 
-	connManager, err := pkglibvirt.NewConnectionManager(log)
+	connManager, err := pkglibvirt.NewConnectionManager(cfg.LibvirtURI, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize connection manager: %w", err)
 	}
-	log.Info("connection manager initialized")
+	log.Info("connection manager initialized", slog.String("uri", cfg.LibvirtURI))
 
 	return service.NewVMService(
 		disk.NewManager(log),

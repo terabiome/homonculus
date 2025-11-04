@@ -1,0 +1,19 @@
+{
+  "token": "MUST_MATCH_MASTER_TOKEN",
+  "master_url": "https://192.168.122.100:6443",
+  "nodes": [
+    {
+      "host": "192.168.122.101",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519",
+      "ssh_port": 22
+    },
+    {
+      "host": "192.168.122.102",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519",
+      "ssh_port": 22
+    }
+  ]
+}
+

@@ -119,7 +119,7 @@ func (s *VMService) CreateCluster(ctx context.Context, vms []CreateVMParams) err
 	defer unlock()
 
 	hypervisor := runtime.HypervisorContext{
-		URI:      "qemu:///system",
+		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
 	}
@@ -246,7 +246,7 @@ func (s *VMService) DeleteCluster(ctx context.Context, vms []DeleteVMParams) err
 	defer unlock()
 
 	hypervisor := runtime.HypervisorContext{
-		URI:      "qemu:///system",
+		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
 	}
@@ -303,7 +303,7 @@ func (s *VMService) StartCluster(ctx context.Context, vms []StartVMParams) error
 	defer unlock()
 
 	hypervisor := runtime.HypervisorContext{
-		URI:      "qemu:///system",
+		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
 	}
@@ -344,7 +344,7 @@ func (s *VMService) QueryCluster(ctx context.Context, vms []QueryVMParams) ([]VM
 	defer unlock()
 
 	hypervisor := runtime.HypervisorContext{
-		URI:      "qemu:///system",
+		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
 	}
@@ -409,7 +409,7 @@ func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) erro
 	defer unlock()
 
 	hypervisor := runtime.HypervisorContext{
-		URI:      "qemu:///system",
+		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
 	}

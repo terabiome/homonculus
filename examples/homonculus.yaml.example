@@ -6,6 +6,12 @@
 #
 # Priority: ENV vars > Config file > Defaults
 
+# Libvirt connection URI
+# Local: qemu:///system (default)
+# Remote via SSH: qemu+ssh://user@remote-host/system
+# Remote via TCP: qemu+tcp://remote-host/system
+libvirt_uri: qemu:///system
+
 # Logging configuration
 log_level: info  # debug, info, warn, error
 log_format: text # text, json

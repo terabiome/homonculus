@@ -1,0 +1,12 @@
+{
+  "token": "REPLACE_WITH_TOKEN_FROM_homonculus_k3s_generate-token",
+  "nodes": [
+    {
+      "host": "192.168.122.100",
+      "ssh_user": "admin",
+      "ssh_key": "~/.ssh/id_ed25519",
+      "ssh_port": 22
+    }
+  ]
+}
+

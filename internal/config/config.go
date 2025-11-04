@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	LibvirtURI                     string
 	LibvirtTemplatePath            string
 	CloudInitUserDataTemplate      string
 	CloudInitMetaDataTemplate      string
@@ -30,6 +31,7 @@ func Load() (*Config, error) {
 		}
 	}
 
+	viper.SetDefault("libvirt_uri", "qemu:///system")
 	viper.SetDefault("libvirt_template", "./templates/libvirt/domain.xml.tpl")
 	viper.SetDefault("cloudinit_user_data_template", "./templates/cloudinit/user-data.tpl")
 	viper.SetDefault("cloudinit_meta_data_template", "./templates/cloudinit/meta-data.tpl")
@@ -42,6 +44,7 @@ func Load() (*Config, error) {
 	viper.AutomaticEnv()
 
 	cfg := &Config{
+		LibvirtURI:                     viper.GetString("libvirt_uri"),
 		LibvirtTemplatePath:            viper.GetString("libvirt_template"),
 		CloudInitUserDataTemplate:      viper.GetString("cloudinit_user_data_template"),
 		CloudInitMetaDataTemplate:      viper.GetString("cloudinit_meta_data_template"),
