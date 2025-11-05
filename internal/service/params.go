@@ -47,6 +47,8 @@ type VMInfo struct {
 	Disks      []DiskInfo
 	AutoStart  bool
 	Persistent bool
+	Hostname   string
+	IPAddress  string
 }
 
 // CloneVMParams contains transport-agnostic parameters for cloning virtual machines.

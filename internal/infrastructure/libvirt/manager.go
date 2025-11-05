@@ -90,7 +90,6 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 	if err != nil {
 		return api.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
 	}
-	stateStr := domainStateToString(state)
 
 	// Get XML description
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
@@ -137,7 +136,7 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 	vmInfo := api.VMInfo{
 		Name:       request.Name,
 		UUID:       uuidStr,
-		State:      stateStr,
+		State:      domainStateToString(state), // Convert to string for JSON API
 		VCPU:       domainXML.VCPU.Value,
 		MemoryMB:   domainXML.CurrentMemory.Value / 1024, // Convert from KiB to MiB
 		Disks:      disks,
@@ -145,7 +144,47 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 		Persistent: persistent,
 	}
 
-	m.logger.Debug("retrieved VM info", slog.String("vm", request.Name), slog.String("state", stateStr))
+	// Try to get DHCP lease information (hostname and IP)
+	// This only works if the VM is running and has acquired a DHCP lease
+	if state == libvirt.DOMAIN_RUNNING {
+		hostname, err := domain.GetHostname(libvirt.DOMAIN_GET_HOSTNAME_LEASE)
+		if err == nil {
+			if hostname == "" {
+				m.logger.Warn("retrieved empty hostname")
+			} else {
+				vmInfo.Hostname = hostname
+				m.logger.Debug("retrieved hostname from DHCP lease", slog.String("vm", request.Name), slog.String("hostname", hostname))
+			}
+		} else {
+			m.logger.Warn("could not get hostname", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		}
+
+		// Get IP addresses from domain interfaces
+		ifaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
+		if err == nil {
+			if len(ifaces) < 1 {
+				m.logger.Warn("retrieved no interface", slog.String("vm", request.Name))
+			} else {
+				// Get the first non-loopback IPv4 address
+				for _, iface := range ifaces {
+					for _, addr := range iface.Addrs {
+						if addr.Type == libvirt.IP_ADDR_TYPE_IPV4 && addr.Addr != "127.0.0.1" {
+							vmInfo.IPAddress = addr.Addr
+							m.logger.Debug("retrieved IP address from DHCP lease", slog.String("vm", request.Name), slog.String("ip", addr.Addr))
+							break
+						}
+					}
+					if vmInfo.IPAddress != "" {
+						break
+					}
+				}
+			}
+		} else {
+			m.logger.Warn("could not get network interface(s)", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		}
+	}
+
+	m.logger.Debug("retrieved VM info", slog.String("vm", request.Name), slog.String("state", vmInfo.State))
 
 	return vmInfo, nil
 }

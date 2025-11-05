@@ -85,6 +85,8 @@ func adaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
 			Disks:      disks,
 			AutoStart:  info.AutoStart,
 			Persistent: info.Persistent,
+			Hostname:   info.Hostname,
+			IPAddress:  info.IPAddress,
 		}
 	}
 	return result

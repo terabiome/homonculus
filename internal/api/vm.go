@@ -41,14 +41,16 @@ type DiskInfo struct {
 
 // VMInfo contains detailed information about a virtual machine.
 type VMInfo struct {
-	Name       string     `json:"name"`
-	UUID       string     `json:"uuid"`
-	State      string     `json:"state"` // running, stopped, paused, etc.
-	VCPU       uint       `json:"vcpu"`
-	MemoryMB   uint       `json:"memory_mb"`
+	Name       string `json:"name"`
+	UUID       string `json:"uuid"`
+	State      string `json:"state"` // running, shutoff, paused, etc. (human-readable for JSON)
+	VCPU       uint   `json:"vcpu"`
+	MemoryMB   uint   `json:"memory_mb"`
 	Disks      []DiskInfo `json:"disks"`
 	AutoStart  bool       `json:"autostart"`
 	Persistent bool       `json:"persistent"`
+	Hostname   string     `json:"hostname,omitempty"`   // DHCP hostname
+	IPAddress  string     `json:"ip_address,omitempty"` // DHCP IP address
 }
 
 // BaseVMSpec identifies the base virtual machine to clone from.

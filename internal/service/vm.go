@@ -593,6 +593,8 @@ func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
 		Disks:      disks,
 		AutoStart:  apiInfo.AutoStart,
 		Persistent: apiInfo.Persistent,
+		Hostname:   apiInfo.Hostname,
+		IPAddress:  apiInfo.IPAddress,
 	}
 }
 
