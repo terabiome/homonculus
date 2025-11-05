@@ -6,9 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/pkg/executor"
+	"golang.org/x/sync/errgroup"
 )
 
 // BootstrapService handles K3s cluster bootstrapping via SSH.
@@ -59,27 +61,47 @@ func (s *BootstrapService) BootstrapMasters(ctx context.Context, config api.K3sM
 	return nil
 }
 
-// BootstrapWorkers installs K3s agent on one or more worker nodes.
+// BootstrapWorkers installs K3s agent on one or more worker nodes in parallel.
 func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config api.K3sWorkerBootstrapConfig) error {
-	s.logger.Info("starting K3s worker bootstrap",
+	s.logger.Info("starting K3s worker bootstrap (parallel)",
 		slog.Int("nodes", len(config.Nodes)),
 		slog.String("master_url", config.MasterURL),
 	)
 
+	// Use errgroup for parallel execution with proper error handling
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Mutex to protect output streaming (prevent interleaved output)
+	var outputMutex sync.Mutex
+
 	for i, node := range config.Nodes {
-		s.logger.Info("bootstrapping K3s worker",
-			slog.Int("index", i+1),
-			slog.Int("total", len(config.Nodes)),
-			slog.String("host", node.Host),
-		)
-		if err := s.bootstrapWorker(ctx, node, config.Token, config.MasterURL); err != nil {
-			s.logger.Error("failed to bootstrap worker",
+		// Capture loop variables
+		i := i
+		node := node
+
+		g.Go(func() error {
+			s.logger.Info("bootstrapping K3s worker",
+				slog.Int("index", i+1),
+				slog.Int("total", len(config.Nodes)),
 				slog.String("host", node.Host),
-				slog.String("error", err.Error()),
 			)
-			return fmt.Errorf("failed to bootstrap worker %s: %w", node.Host, err)
-		}
-		s.logger.Info("K3s worker bootstrapped successfully", slog.String("host", node.Host))
+
+			if err := s.bootstrapWorker(ctx, node, config.Token, config.MasterURL, &outputMutex); err != nil {
+				s.logger.Error("failed to bootstrap worker",
+					slog.String("host", node.Host),
+					slog.String("error", err.Error()),
+				)
+				return fmt.Errorf("failed to bootstrap worker %s: %w", node.Host, err)
+			}
+
+			s.logger.Info("K3s worker bootstrapped successfully", slog.String("host", node.Host))
+			return nil
+		})
+	}
+
+	// Wait for all workers to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	s.logger.Info("K3s worker bootstrap complete", slog.Int("nodes", len(config.Nodes)))
@@ -94,8 +116,9 @@ func (s *BootstrapService) bootstrapMaster(ctx context.Context, node api.K3sNode
 	}
 	defer exec.Close()
 
-	// Pass entire command as single string to avoid shell quoting issues
-	cmd := fmt.Sprintf("curl -sfL https://get.k3s.io | K3S_TOKEN=%s sh -s - server --cluster-init", token)
+	// Use INSTALL_K3S_EXEC with environment variables as per K3s documentation
+	// Reference: https://docs.k3s.io/installation/configuration#configuration-with-install-script
+	cmd := fmt.Sprintf("curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"server --cluster-init\" K3S_TOKEN=%s sh -s -", token)
 
 	s.logger.Info("executing K3s master installation", slog.String("host", node.Host))
 
@@ -110,7 +133,7 @@ func (s *BootstrapService) bootstrapMaster(ctx context.Context, node api.K3sNode
 	return nil
 }
 
-func (s *BootstrapService) bootstrapWorker(ctx context.Context, node api.K3sNodeConfig, token, masterURL string) error {
+func (s *BootstrapService) bootstrapWorker(ctx context.Context, node api.K3sNodeConfig, token, masterURL string, outputMutex *sync.Mutex) error {
 	// Create SSH executor with persistent connection
 	exec, err := s.createExecutor(node)
 	if err != nil {
@@ -118,10 +141,15 @@ func (s *BootstrapService) bootstrapWorker(ctx context.Context, node api.K3sNode
 	}
 	defer exec.Close()
 
-	// Pass entire command as single string to avoid shell quoting issues
-	cmd := fmt.Sprintf("curl -sfL https://get.k3s.io | K3S_TOKEN=%s K3S_URL=%s sh -s - agent", token, masterURL)
+	// Use INSTALL_K3S_EXEC with environment variables as per K3s documentation
+	// Reference: https://docs.k3s.io/installation/configuration#configuration-with-install-script
+	cmd := fmt.Sprintf("curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"agent\" K3S_URL=%s K3S_TOKEN=%s sh -s -", masterURL, token)
 
 	s.logger.Info("executing K3s worker installation", slog.String("host", node.Host))
+
+	// Lock output writers to prevent interleaved output from parallel workers
+	outputMutex.Lock()
+	defer outputMutex.Unlock()
 
 	// Stream output to configured writers (defaults to os.Stdout/os.Stderr)
 	_, err = exec.Execute(ctx, s.stdout, s.stderr, cmd)
