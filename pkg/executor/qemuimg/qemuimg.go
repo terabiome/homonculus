@@ -10,7 +10,8 @@ import (
 type BackingImageOptions struct {
 	BackingFile       string
 	BackingFileFormat string
-	OutputPath        string
+	OutputFile        string
+	OutputFileFormat  string
 	SizeGB            int64
 }
 
@@ -19,8 +20,8 @@ func CreateBackingImage(ctx context.Context, exec executor.Executor, opts Backin
 		"create",
 		"-b", opts.BackingFile,
 		"-F", opts.BackingFileFormat,
-		"-f", "qcow2",
-		opts.OutputPath,
+		"-f", opts.OutputFileFormat,
+		opts.OutputFile,
 		fmt.Sprintf("%dG", opts.SizeGB),
 	}
 
@@ -44,4 +45,3 @@ func Info(ctx context.Context, exec executor.Executor, opts InfoOptions) (string
 	}
 	return result.Stdout, nil
 }
-

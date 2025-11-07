@@ -32,20 +32,24 @@ func (m *Manager) CreateDisk(ctx context.Context, hypervisor runtime.HypervisorC
 		slog.Int64("size_gb", req.DiskSizeGB),
 	)
 
-	backingFileFormat := strings.ToLower(path.Ext(req.BaseImagePath))
-	switch backingFileFormat {
-	case ".qcow2":
-		backingFileFormat = "qcow2"
-	default:
-		return fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
+	backingFileFormat, err := parseBackingFileFormat(req.BaseImagePath)
+	if err != nil {
+		return err
 	}
 
-	err := qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
+	outputFileFormat, err := parseOutputFileFormat(req.DiskPath)
+	if err != nil {
+		return err
+	}
+
+	err = qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
 		BackingFile:       req.BaseImagePath,
 		BackingFileFormat: backingFileFormat,
-		OutputPath:        req.DiskPath,
+		OutputFile:        req.DiskPath,
+		OutputFileFormat:  outputFileFormat,
 		SizeGB:            req.DiskSizeGB,
 	})
+
 	if err != nil {
 		return err
 	}
@@ -66,18 +70,21 @@ func (m *Manager) CreateDiskForClone(ctx context.Context, hypervisor runtime.Hyp
 		slog.Int64("size_gb", req.DiskSizeGB),
 	)
 
-	backingFileFormat := strings.ToLower(path.Ext(req.BaseImagePath))
-	switch backingFileFormat {
-	case ".qcow2":
-		backingFileFormat = "qcow2"
-	default:
-		return fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
+	backingFileFormat, err := parseBackingFileFormat(req.BaseImagePath)
+	if err != nil {
+		return err
 	}
 
-	err := qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
+	outputFileFormat, err := parseOutputFileFormat(req.DiskPath)
+	if err != nil {
+		return err
+	}
+
+	err = qemuimg.CreateBackingImage(ctx, hypervisor.Executor, qemuimg.BackingImageOptions{
 		BackingFile:       req.BaseImagePath,
 		BackingFileFormat: backingFileFormat,
-		OutputPath:        req.DiskPath,
+		OutputFile:        req.DiskPath,
+		OutputFileFormat:  outputFileFormat,
 		SizeGB:            req.DiskSizeGB,
 	})
 	if err != nil {
@@ -92,3 +99,24 @@ func (m *Manager) CreateDiskForClone(ctx context.Context, hypervisor runtime.Hyp
 	return nil
 }
 
+func parseBackingFileFormat(backingFilePath string) (string, error) {
+	backingFileFormat := strings.ToLower(path.Ext(backingFilePath))
+
+	switch backingFileFormat {
+	case ".qcow2":
+		return "qcow2", nil
+	}
+
+	return "", fmt.Errorf("unsupported backing file format: %s", backingFileFormat)
+}
+
+func parseOutputFileFormat(outputFilePath string) (string, error) {
+	outputFileFormat := strings.ToLower(path.Ext(outputFilePath))
+
+	switch outputFileFormat {
+	case ".qcow2":
+		return "qcow2", nil
+	}
+
+	return "", fmt.Errorf("unsupported output file format: %s", outputFileFormat)
+}

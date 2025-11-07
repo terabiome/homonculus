@@ -8,14 +8,14 @@ import (
 )
 
 type ISOOptions struct {
-	OutputPath string
+	OutputFile string
 	VolumeID   string
 	Files      []string
 }
 
 func CreateISO(ctx context.Context, exec executor.Executor, opts ISOOptions) error {
 	args := []string{
-		"-output", opts.OutputPath,
+		"-output", opts.OutputFile,
 		"-volid", opts.VolumeID,
 		"-joliet",
 		"-r",
@@ -30,4 +30,3 @@ func CreateISO(ctx context.Context, exec executor.Executor, opts ISOOptions) err
 
 	return nil
 }
-

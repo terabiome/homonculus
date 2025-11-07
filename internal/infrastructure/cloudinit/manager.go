@@ -63,7 +63,7 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 	}
 
 	err = mkisofs.CreateISO(ctx, hypervisor.Executor, mkisofs.ISOOptions{
-		OutputPath: vmRequest.CloudInitISOPath,
+		OutputFile: vmRequest.CloudInitISOPath,
 		VolumeID:   "cidata",
 		Files:      isoFiles,
 	})
