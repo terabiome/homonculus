@@ -78,6 +78,19 @@ func main() {
 		Usage:                "Provision and manage libvirt virtual machines",
 		EnableBashCompletion: true,
 		Commands: []*cli.Command{
+		{
+			Name:  "system",
+			Usage: "Show system information",
+			Subcommands: []*cli.Command{
+				{
+					Name:  "cpu-topology",
+					Usage: "Display CPU and NUMA topology information",
+					Action: func(cliCtx *cli.Context) error {
+						return runSystemInfo()
+					},
+				},
+			},
+		},
 			{
 				Name:  "virtualmachine",
 				Usage: "Execute VM-related functions",
