@@ -9,10 +9,13 @@
     <memory unit='KiB'>{{ .MemoryKiB }}</memory>
     <currentMemory unit='KiB'>{{ .MemoryKiB }}</currentMemory>
     <vcpu placement='static'>{{ .VCPUCount }}</vcpu>
-    {{- if .VCPUPins }}
+    {{- if or .VCPUPins .EmulatorCPUSet }}
     <cputune>
         {{- range .VCPUPins }}
         <vcpupin vcpu='{{ .VCPU }}' cpuset='{{ .CPUSet }}'/>
+        {{- end }}
+        {{- if .EmulatorCPUSet }}
+        <emulatorpin cpuset='{{ .EmulatorCPUSet }}'/>
         {{- end }}
     </cputune>
     {{- end }}

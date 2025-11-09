@@ -10,8 +10,9 @@ type NUMAMemory struct {
 
 // VMTuning contains virtual machine performance tuning configuration.
 type VMTuning struct {
-	VCPUPins   []string    `json:"vcpu_pins,omitempty"`   // CPU pinning: list of CPU sets
-	NUMAMemory *NUMAMemory `json:"numa_memory,omitempty"` // NUMA memory placement
+	VCPUPins       []string    `json:"vcpu_pins,omitempty"`       // CPU pinning: list of CPU sets
+	EmulatorCPUSet string      `json:"emulator_cpuset,omitempty"` // CPU set for QEMU/KVM emulator threads
+	NUMAMemory     *NUMAMemory `json:"numa_memory,omitempty"`     // NUMA memory placement
 }
 
 // CreateVMRequest contains the configuration for creating a single virtual machine.

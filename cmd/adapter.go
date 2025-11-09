@@ -21,7 +21,8 @@ func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 	// Convert tuning configuration if present
 	if vm.Tuning != nil {
 		tuning = &service.VMTuning{
-			VCPUPins: vm.Tuning.VCPUPins,
+			VCPUPins:       vm.Tuning.VCPUPins,
+			EmulatorCPUSet: vm.Tuning.EmulatorCPUSet,
 		}
 
 		// Convert NUMA memory if present

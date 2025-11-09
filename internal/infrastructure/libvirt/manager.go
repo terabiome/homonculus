@@ -32,6 +32,7 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 // CreateVirtualMachine creates a virtual machine without starting it.
 func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
 	var vcpuPins []VCPUPin
+	var emulatorCPUSet string
 	var numaMemory *NUMAMemory
 
 	// Process tuning configuration if present
@@ -59,6 +60,9 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 				}
 			}
 		}
+
+		// Process emulator CPU set
+		emulatorCPUSet = request.Tuning.EmulatorCPUSet
 
 		// Process NUMA memory configuration
 		if request.Tuning.NUMAMemory != nil {
@@ -88,6 +92,7 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 		CloudInitISOPath:       request.CloudInitISOPath,
 		BridgeNetworkInterface: request.BridgeNetworkInterface,
 		VCPUPins:               vcpuPins,
+		EmulatorCPUSet:         emulatorCPUSet,
 		NUMAMemory:             numaMemory,
 	}
 

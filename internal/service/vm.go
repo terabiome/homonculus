@@ -546,7 +546,8 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 	// Convert tuning configuration if present
 	if params.Tuning != nil {
 		tuning = &api.VMTuning{
-			VCPUPins: params.Tuning.VCPUPins,
+			VCPUPins:       params.Tuning.VCPUPins,
+			EmulatorCPUSet: params.Tuning.EmulatorCPUSet,
 		}
 
 		// Convert NUMA memory if present

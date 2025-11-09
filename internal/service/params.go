@@ -8,8 +8,9 @@ type NUMAMemory struct {
 
 // VMTuning contains virtual machine performance tuning configuration.
 type VMTuning struct {
-	VCPUPins   []string
-	NUMAMemory *NUMAMemory
+	VCPUPins       []string
+	EmulatorCPUSet string
+	NUMAMemory     *NUMAMemory
 }
 
 // CreateVMParams contains transport-agnostic parameters for creating a virtual machine.

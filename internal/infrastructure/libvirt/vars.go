@@ -23,5 +23,6 @@ type LibvirtTemplateVars struct {
 	DiskPath               string
 	CloudInitISOPath       string
 	VCPUPins               []VCPUPin
+	EmulatorCPUSet         string
 	NUMAMemory             *NUMAMemory
 }

@@ -11,6 +11,7 @@
       "cloud_init_iso_path": "/var/lib/libvirt/images/numa-vm-strict-cloud-init.iso",
       "tuning": {
         "vcpu_pins": ["0", "1", "2", "3"],
+        "emulator_cpuset": "4-5",
         "numa_memory": {
           "nodeset": "0",
           "mode": "strict"
@@ -36,6 +37,7 @@
       "cloud_init_iso_path": "/var/lib/libvirt/images/numa-vm-preferred-cloud-init.iso",
       "tuning": {
         "vcpu_pins": ["8", "9", "10", "11", "12", "13", "14", "15"],
+        "emulator_cpuset": "16-17",
         "numa_memory": {
           "nodeset": "1",
           "mode": "preferred"
