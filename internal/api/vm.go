@@ -2,10 +2,22 @@ package api
 
 import "github.com/terabiome/homonculus/pkg/constants"
 
+// NUMAMemory contains NUMA memory tuning configuration.
+type NUMAMemory struct {
+	Nodeset string `json:"nodeset"`        // NUMA node set (e.g., "0", "0-1", "0,2")
+	Mode    string `json:"mode,omitempty"` // strict, preferred, or interleave (default: strict)
+}
+
+// VMTuning contains virtual machine performance tuning configuration.
+type VMTuning struct {
+	VCPUPins   []string    `json:"vcpu_pins,omitempty"`   // CPU pinning: list of CPU sets
+	NUMAMemory *NUMAMemory `json:"numa_memory,omitempty"` // NUMA memory placement
+}
+
 // CreateVMRequest contains the configuration for creating a single virtual machine.
 type CreateVMRequest struct {
 	Name                   string                   `json:"name"`
-	VCPU                   int                      `json:"vcpu"`
+	VCPUCount              int                      `json:"vcpu_count"`
 	MemoryMB               int64                    `json:"memory_mb"`
 	DiskPath               string                   `json:"disk_path"`
 	DiskSizeGB             int64                    `json:"disk_size_gb"`
@@ -14,6 +26,7 @@ type CreateVMRequest struct {
 	CloudInitISOPath       string                   `json:"cloud_init_iso_path"`
 	Role                   constants.KubernetesRole `json:"role,omitempty"`
 	UserConfigs            []UserConfig             `json:"user_configs"`
+	Tuning                 *VMTuning                `json:"tuning,omitempty"` // VM performance tuning
 }
 
 // DeleteVMRequest contains the configuration for deleting a single virtual machine.
@@ -41,11 +54,11 @@ type DiskInfo struct {
 
 // VMInfo contains detailed information about a virtual machine.
 type VMInfo struct {
-	Name       string `json:"name"`
-	UUID       string `json:"uuid"`
-	State      string `json:"state"` // running, shutoff, paused, etc. (human-readable for JSON)
-	VCPU       uint   `json:"vcpu"`
-	MemoryMB   uint   `json:"memory_mb"`
+	Name       string     `json:"name"`
+	UUID       string     `json:"uuid"`
+	State      string     `json:"state"` // running, shutoff, paused, etc. (human-readable for JSON)
+	VCPUCount  uint       `json:"vcpu_count"`
+	MemoryMB   uint       `json:"memory_mb"`
 	Disks      []DiskInfo `json:"disks"`
 	AutoStart  bool       `json:"autostart"`
 	Persistent bool       `json:"persistent"`
@@ -62,7 +75,7 @@ type BaseVMSpec struct {
 // BaseImagePath is populated internally from the base VM's disk and is not part of the API.
 type TargetVMSpec struct {
 	Name          string `json:"name"`
-	VCPU          int    `json:"vcpu"`
+	VCPUCount     int    `json:"vcpu_count"`
 	MemoryMB      int64  `json:"memory_mb"`
 	DiskPath      string `json:"disk_path"`
 	DiskSizeGB    int64  `json:"disk_size_gb"`

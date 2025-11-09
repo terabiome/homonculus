@@ -16,9 +16,26 @@ func adaptCreateCluster(req api.CreateClusterRequest) []service.CreateVMParams {
 
 // adaptCreateVM converts a single VM create request to service params
 func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
+	var tuning *service.VMTuning
+
+	// Convert tuning configuration if present
+	if vm.Tuning != nil {
+		tuning = &service.VMTuning{
+			VCPUPins: vm.Tuning.VCPUPins,
+		}
+
+		// Convert NUMA memory if present
+		if vm.Tuning.NUMAMemory != nil {
+			tuning.NUMAMemory = &service.NUMAMemory{
+				Nodeset: vm.Tuning.NUMAMemory.Nodeset,
+				Mode:    vm.Tuning.NUMAMemory.Mode,
+			}
+		}
+	}
+
 	return service.CreateVMParams{
 		Name:                   vm.Name,
-		VCPU:                   vm.VCPU,
+		VCPUCount:              vm.VCPUCount,
 		MemoryMB:               vm.MemoryMB,
 		DiskPath:               vm.DiskPath,
 		DiskSizeGB:             vm.DiskSizeGB,
@@ -27,6 +44,7 @@ func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 		CloudInitISOPath:       vm.CloudInitISOPath,
 		Role:                   string(vm.Role),
 		UserConfigs:            adaptUserConfigs(vm.UserConfigs),
+		Tuning:                 tuning,
 	}
 }
 
@@ -80,7 +98,7 @@ func adaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
 			Name:       info.Name,
 			UUID:       info.UUID,
 			State:      info.State,
-			VCPU:       info.VCPU,
+			VCPUCount:  info.VCPUCount,
 			MemoryMB:   info.MemoryMB,
 			Disks:      disks,
 			AutoStart:  info.AutoStart,
@@ -98,7 +116,7 @@ func adaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	for i, target := range req.TargetVMs {
 		targetSpecs[i] = service.TargetVMSpec{
 			Name:          target.Name,
-			VCPU:          target.VCPU,
+			VCPUCount:     target.VCPUCount,
 			MemoryMB:      target.MemoryMB,
 			DiskPath:      target.DiskPath,
 			DiskSizeGB:    target.DiskSizeGB,

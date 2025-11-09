@@ -1,0 +1,73 @@
+{
+  "virtual_machines": [
+    {
+      "name": "numa-vm-strict",
+      "vcpu_count": 4,
+      "memory_mb": 8192,
+      "disk_path": "/var/lib/libvirt/images/numa-vm-strict.qcow2",
+      "disk_size_gb": 50,
+      "base_image_path": "/var/lib/libvirt/images/base.qcow2",
+      "bridge_network_interface": "br0",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/numa-vm-strict-cloud-init.iso",
+      "tuning": {
+        "vcpu_pins": ["0", "1", "2", "3"],
+        "numa_memory": {
+          "nodeset": "0",
+          "mode": "strict"
+        }
+      },
+      "user_configs": [
+        {
+          "username": "admin",
+          "ssh_authorized_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... user@host"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "numa-vm-preferred",
+      "vcpu_count": 8,
+      "memory_mb": 16384,
+      "disk_path": "/var/lib/libvirt/images/numa-vm-preferred.qcow2",
+      "disk_size_gb": 100,
+      "base_image_path": "/var/lib/libvirt/images/base.qcow2",
+      "bridge_network_interface": "br0",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/numa-vm-preferred-cloud-init.iso",
+      "tuning": {
+        "vcpu_pins": ["8", "9", "10", "11", "12", "13", "14", "15"],
+        "numa_memory": {
+          "nodeset": "1",
+          "mode": "preferred"
+        }
+      },
+      "user_configs": [
+        {
+          "username": "admin",
+          "ssh_authorized_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... user@host"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "no-tuning-vm",
+      "vcpu_count": 2,
+      "memory_mb": 4096,
+      "disk_path": "/var/lib/libvirt/images/no-tuning-vm.qcow2",
+      "disk_size_gb": 30,
+      "base_image_path": "/var/lib/libvirt/images/base.qcow2",
+      "bridge_network_interface": "br0",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/no-tuning-vm-cloud-init.iso",
+      "user_configs": [
+        {
+          "username": "admin",
+          "ssh_authorized_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... user@host"
+          ]
+        }
+      ]
+    }
+  ]
+}
+

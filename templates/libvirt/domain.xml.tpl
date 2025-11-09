@@ -8,7 +8,19 @@
     <!-- Resources -->
     <memory unit='KiB'>{{ .MemoryKiB }}</memory>
     <currentMemory unit='KiB'>{{ .MemoryKiB }}</currentMemory>
-    <vcpu placement='static'>{{ .VCPU }}</vcpu>
+    <vcpu placement='static'>{{ .VCPUCount }}</vcpu>
+    {{- if .VCPUPins }}
+    <cputune>
+        {{- range .VCPUPins }}
+        <vcpupin vcpu='{{ .VCPU }}' cpuset='{{ .CPUSet }}'/>
+        {{- end }}
+    </cputune>
+    {{- end }}
+    {{- if .NUMAMemory }}
+    <numatune>
+        <memory mode='{{ .NUMAMemory.Mode }}' nodeset='{{ .NUMAMemory.Nodeset }}'/>
+    </numatune>
+    {{- end }}
 
     <!-- OS and Boot Configuration -->
     <os>

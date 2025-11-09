@@ -1,0 +1,41 @@
+{
+  "virtual_machines": [
+    {
+      "name": "k3s-master",
+      "vcpu": 4,
+      "memory_mb": 8192,
+      "disk_size_gb": 50,
+      "disk_path": "/var/lib/libvirt/images/k3s-master.qcow2",
+      "base_image_path": "/var/lib/libvirt/images/base.qcow2",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/k3s-master-cidata.iso",
+      "bridge_network_interface": "virbr0",
+      "user_configs": [
+        {
+          "username": "admin",
+          "ssh_authorized_keys": [
+            "ssh-ed25519 AAAAC3Nza... your-public-key-here"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "k3s-worker-1",
+      "vcpu": 2,
+      "memory_mb": 4096,
+      "disk_size_gb": 30,
+      "disk_path": "/var/lib/libvirt/images/k3s-worker-1.qcow2",
+      "base_image_path": "/var/lib/libvirt/images/base.qcow2",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/k3s-worker-1-cidata.iso",
+      "bridge_network_interface": "virbr0",
+      "user_configs": [
+        {
+          "username": "admin",
+          "ssh_authorized_keys": [
+            "ssh-ed25519 AAAAC3Nza... your-public-key-here"
+          ]
+        }
+      ]
+    }
+  ]
+}
+

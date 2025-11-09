@@ -30,4 +30,3 @@ type CloneClusterRequest struct {
 	BaseVM    BaseVMSpec     `json:"base_virtual_machine"`
 	TargetVMs []TargetVMSpec `json:"target_virtual_machines"`
 }
-

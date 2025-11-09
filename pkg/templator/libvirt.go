@@ -11,7 +11,7 @@ type LibvirtTemplatePlaceholder struct {
 	Name                   string
 	UUID                   uuid.UUID
 	MemoryKiB              int64
-	VCPU                   int
+	VCPUCount              int
 	BridgeNetworkInterface string
 	DiskPath               string
 	CloudInitISOPath       string

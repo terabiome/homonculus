@@ -1,9 +1,21 @@
 package service
 
+// NUMAMemory contains NUMA memory tuning configuration.
+type NUMAMemory struct {
+	Nodeset string
+	Mode    string // strict, preferred, or interleave
+}
+
+// VMTuning contains virtual machine performance tuning configuration.
+type VMTuning struct {
+	VCPUPins   []string
+	NUMAMemory *NUMAMemory
+}
+
 // CreateVMParams contains transport-agnostic parameters for creating a virtual machine.
 type CreateVMParams struct {
 	Name                   string
-	VCPU                   int
+	VCPUCount              int
 	MemoryMB               int64
 	DiskPath               string
 	DiskSizeGB             int64
@@ -12,6 +24,7 @@ type CreateVMParams struct {
 	CloudInitISOPath       string
 	Role                   string
 	UserConfigs            []UserConfig
+	Tuning                 *VMTuning
 }
 
 // DeleteVMParams contains transport-agnostic parameters for deleting a virtual machine.
@@ -42,7 +55,7 @@ type VMInfo struct {
 	Name       string
 	UUID       string
 	State      string
-	VCPU       uint
+	VCPUCount  uint
 	MemoryMB   uint
 	Disks      []DiskInfo
 	AutoStart  bool
@@ -60,7 +73,7 @@ type CloneVMParams struct {
 // TargetVMSpec contains the configuration for a cloned virtual machine.
 type TargetVMSpec struct {
 	Name          string
-	VCPU          int
+	VCPUCount     int
 	MemoryMB      int64
 	DiskPath      string
 	DiskSizeGB    int64

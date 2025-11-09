@@ -31,14 +31,64 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 
 // CreateVirtualMachine creates a virtual machine without starting it.
 func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
+	var vcpuPins []VCPUPin
+	var numaMemory *NUMAMemory
+
+	// Process tuning configuration if present
+	if request.Tuning != nil {
+		// Validate CPU pinning configuration
+		if len(request.Tuning.VCPUPins) > 0 {
+			if len(request.Tuning.VCPUPins) > request.VCPUCount {
+				return fmt.Errorf("vcpu_pins length (%d) exceeds vcpu_count (%d)", len(request.Tuning.VCPUPins), request.VCPUCount)
+			}
+			if len(request.Tuning.VCPUPins) < request.VCPUCount {
+				m.logger.Warn("partial CPU pinning detected",
+					slog.String("vm", request.Name),
+					slog.Int("vcpu_count", request.VCPUCount),
+					slog.Int("vcpu_pins", len(request.Tuning.VCPUPins)),
+					slog.String("note", "remaining vCPUs will not be pinned"),
+				)
+			}
+
+			// Convert cpuset strings to VCPUPin structs with explicit vcpu indices
+			vcpuPins = make([]VCPUPin, len(request.Tuning.VCPUPins))
+			for i, cpuset := range request.Tuning.VCPUPins {
+				vcpuPins[i] = VCPUPin{
+					VCPU:   i,
+					CPUSet: cpuset,
+				}
+			}
+		}
+
+		// Process NUMA memory configuration
+		if request.Tuning.NUMAMemory != nil {
+			mode := request.Tuning.NUMAMemory.Mode
+			// Default to preferred if not specified (sweet default)
+			if mode == "" {
+				mode = "preferred"
+			}
+			// Validate mode
+			if mode != "strict" && mode != "preferred" && mode != "interleave" {
+				return fmt.Errorf("invalid NUMA memory mode '%s': must be 'strict', 'preferred', or 'interleave'", mode)
+			}
+
+			numaMemory = &NUMAMemory{
+				Nodeset: request.Tuning.NUMAMemory.Nodeset,
+				Mode:    mode,
+			}
+		}
+	}
+
 	vars := LibvirtTemplateVars{
 		Name:                   request.Name,
 		UUID:                   virtualMachineUUID,
-		VCPU:                   request.VCPU,
+		VCPUCount:              request.VCPUCount,
 		MemoryKiB:              request.MemoryMB << 10,
 		DiskPath:               request.DiskPath,
 		CloudInitISOPath:       request.CloudInitISOPath,
 		BridgeNetworkInterface: request.BridgeNetworkInterface,
+		VCPUPins:               vcpuPins,
+		NUMAMemory:             numaMemory,
 	}
 
 	bytes, err := m.engine.RenderToBytes(constants.TemplateLibvirt, vars)
@@ -137,7 +187,7 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 		Name:       request.Name,
 		UUID:       uuidStr,
 		State:      domainStateToString(state), // Convert to string for JSON API
-		VCPU:       domainXML.VCPU.Value,
+		VCPUCount:  domainXML.VCPU.Value,
 		MemoryMB:   domainXML.CurrentMemory.Value / 1024, // Convert from KiB to MiB
 		Disks:      disks,
 		AutoStart:  autoStart,
@@ -344,7 +394,7 @@ func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor runtime.Hy
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
 	newDomainXML.UUID = virtualMachineUUID.String()
-	newDomainXML.VCPU.Value = uint(targetInfo.VCPU)
+	newDomainXML.VCPU.Value = uint(targetInfo.VCPUCount)
 	newDomainXML.CurrentMemory.Value = uint(targetInfo.MemoryMB << 10)
 	newDomainXML.CurrentMemory.Unit = "KiB"
 	newDomainXML.Memory.Value = uint(targetInfo.MemoryMB << 10)

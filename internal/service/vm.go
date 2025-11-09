@@ -541,9 +541,26 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 		}
 	}
 
+	var tuning *api.VMTuning
+
+	// Convert tuning configuration if present
+	if params.Tuning != nil {
+		tuning = &api.VMTuning{
+			VCPUPins: params.Tuning.VCPUPins,
+		}
+
+		// Convert NUMA memory if present
+		if params.Tuning.NUMAMemory != nil {
+			tuning.NUMAMemory = &api.NUMAMemory{
+				Nodeset: params.Tuning.NUMAMemory.Nodeset,
+				Mode:    params.Tuning.NUMAMemory.Mode,
+			}
+		}
+	}
+
 	return api.CreateVMRequest{
 		Name:                   params.Name,
-		VCPU:                   params.VCPU,
+		VCPUCount:              params.VCPUCount,
 		MemoryMB:               params.MemoryMB,
 		DiskPath:               params.DiskPath,
 		DiskSizeGB:             params.DiskSizeGB,
@@ -552,6 +569,7 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 		CloudInitISOPath:       params.CloudInitISOPath,
 		Role:                   constants.KubernetesRole(params.Role),
 		UserConfigs:            userConfigs,
+		Tuning:                 tuning,
 	}
 }
 
@@ -588,7 +606,7 @@ func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
 		Name:       apiInfo.Name,
 		UUID:       apiInfo.UUID,
 		State:      apiInfo.State,
-		VCPU:       apiInfo.VCPU,
+		VCPUCount:  apiInfo.VCPUCount,
 		MemoryMB:   apiInfo.MemoryMB,
 		Disks:      disks,
 		AutoStart:  apiInfo.AutoStart,
@@ -601,7 +619,7 @@ func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
 func (s *VMService) toTargetVMSpec(spec TargetVMSpec) api.TargetVMSpec {
 	return api.TargetVMSpec{
 		Name:          spec.Name,
-		VCPU:          spec.VCPU,
+		VCPUCount:     spec.VCPUCount,
 		MemoryMB:      spec.MemoryMB,
 		DiskPath:      spec.DiskPath,
 		DiskSizeGB:    spec.DiskSizeGB,
