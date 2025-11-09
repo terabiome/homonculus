@@ -114,7 +114,7 @@ Copy and customize [vm.cluster-numa.json.example](../examples/definitions/virtua
 - **Characteristics**: CPU-intensive, memory-bound, latency-sensitive
 
 ### VM2: Data Worker (Node 1)
-- **Resources**: 8 cores (16 threads), 60GB RAM, 80GB SSD + 8TB HDD
+- **Resources**: 6 cores (12 threads), 60GB RAM, 80GB SSD + 8TB HDD
 - **Workload**: PostgreSQL database + data lake
 - **Characteristics**: Mixed CPU/I/O, database queries, bulk writes
 
@@ -123,10 +123,10 @@ Copy and customize [vm.cluster-numa.json.example](../examples/definitions/virtua
 - **Workload**: Light SLM inference
 - **Characteristics**: CPU-intensive, memory-bound
 
-### VM4: Task Processing Worker (Node 1)
-- **Resources**: 4 cores (8 threads), 24GB RAM
-- **Workload**: ETL jobs, coordination tasks
-- **Characteristics**: Mixed CPU/I/O, batch processing
+### VM4: K3s Server + Task Processing (Node 1)
+- **Resources**: 6 cores (12 threads), 24GB RAM
+- **Workload**: K3s control plane (API server, scheduler, controller) + heavy parallel processing
+- **Characteristics**: K3s system services + CPU-intensive parallel compute
 
 ## Design Principles
 

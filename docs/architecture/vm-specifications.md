@@ -17,9 +17,9 @@ This document provides detailed specifications for each VM in the NUMA-aware K8s
 
 | Component | Cores | Threads | Purpose |
 |-----------|-------|---------|---------|
-| VM2 (data) | 8 | 16 | Database + data lake workload |
+| VM2 (data) | 6 | 12 | Database + data lake workload |
 | VM3 (slm) | 4 | 8 | Light SLM inference workload |
-| VM4 (tasks) | 4 | 8 | ETL/task processing workload |
+| VM4 (server-tasks) | 6 | 12 | K3s control plane + heavy parallel processing |
 | Emulator + Host | 2 | 4 | QEMU emulator (shared) + host |
 
 ## VM1: k3s-worker-slm-heavy
@@ -86,13 +86,15 @@ taints:
     value: "slm"
     effect: "NoSchedule"
 
-# Pod toleration
+# Pod toleration (for SLM workloads)
 tolerations:
   - key: "workload"
     operator: "Equal"
     value: "slm"
     effect: "NoSchedule"
 ```
+
+**Note:** Both `slm-heavy` and `slm` nodes use the same taint. Kubernetes will schedule pods based on resource requests to the appropriate node.
 
 ---
 
@@ -106,17 +108,17 @@ Database (PostgreSQL) and data lake storage - handles structured data queries an
 ```json
 {
   "name": "k3s-worker-data",
-  "vcpu_count": 16,
+  "vcpu_count": 12,
   "memory_mb": 61440,
   "disk_path": "/var/lib/libvirt/images/data.qcow2",
   "disk_size_gb": 40,
   "base_image_path": "/var/lib/libvirt/images/base.qcow2",
   "bridge_network_interface": "br0",
   "cloud_init_iso_path": "/var/lib/libvirt/images/data-cloud-init.iso",
-  "tuning": {
+      "tuning": {
     "vcpu_pins": [
       "18", "54", "19", "55", "20", "56", "21", "57",
-      "22", "58", "23", "59", "24", "60", "25", "61"
+      "22", "58", "23", "59"
     ],
     "emulator_cpuset": "34-35,70-71",
     "numa_memory": {
@@ -135,8 +137,8 @@ Database (PostgreSQL) and data lake storage - handles structured data queries an
 
 ### Resource Allocation
 
-- **vCPUs**: 16 (8 physical cores with hyperthreading)
-- **CPU Pinning**: Threads 18-25, 54-61 (cores 0-7 on socket 1)
+- **vCPUs**: 12 (6 physical cores with hyperthreading)
+- **CPU Pinning**: Threads 18-23, 54-59 (cores 0-5 on socket 1)
 - **Emulator**: Threads 34-35, 70-71 (shared with VM3, VM4)
 - **Memory**: 60 GB (strict binding to NUMA node 1)
 - **Storage**:
@@ -215,9 +217,9 @@ Light SLM inference - handles lighter SLM workloads and assists with cross-check
   "base_image_path": "/var/lib/libvirt/images/base.qcow2",
   "bridge_network_interface": "br0",
   "cloud_init_iso_path": "/var/lib/libvirt/images/slm-cloud-init.iso",
-  "tuning": {
+      "tuning": {
     "vcpu_pins": [
-      "26", "62", "27", "63", "28", "64", "29", "65"
+      "24", "60", "25", "61", "26", "62", "27", "63"
     ],
     "emulator_cpuset": "34-35,70-71",
     "numa_memory": {
@@ -237,7 +239,7 @@ Light SLM inference - handles lighter SLM workloads and assists with cross-check
 ### Resource Allocation
 
 - **vCPUs**: 8 (4 physical cores with hyperthreading)
-- **CPU Pinning**: Threads 26-29, 62-65 (cores 8-11 on socket 1)
+- **CPU Pinning**: Threads 24-27, 60-63 (cores 6-9 on socket 1)
 - **Emulator**: Threads 34-35, 70-71 (shared)
 - **Memory**: 32 GB (strict binding to NUMA node 1)
 - **Storage**: 40 GB SSD (OS + model weights)
@@ -268,26 +270,27 @@ tolerations:
 
 ---
 
-## VM4: k3s-worker-tasks
+## VM4: k3s-server-tasks
 
 ### Purpose
-ETL and task processing - handles data transformation, batch jobs, and coordination tasks.
+K3s control plane server + task processing - runs the K3s API server, scheduler, controller-manager, and also handles ETL jobs, batch processing, and coordination tasks.
 
 ### Specifications
 
 ```json
 {
-  "name": "k3s-worker-tasks",
-  "vcpu_count": 8,
+  "name": "k3s-server-tasks",
+  "vcpu_count": 12,
   "memory_mb": 24576,
   "disk_path": "/var/lib/libvirt/images/tasks.qcow2",
   "disk_size_gb": 40,
   "base_image_path": "/var/lib/libvirt/images/base.qcow2",
   "bridge_network_interface": "br0",
   "cloud_init_iso_path": "/var/lib/libvirt/images/tasks-cloud-init.iso",
-  "tuning": {
+      "tuning": {
     "vcpu_pins": [
-      "30", "66", "31", "67", "32", "68", "33", "69"
+      "28", "64", "29", "65", "30", "66", "31", "67",
+      "32", "68", "33", "69"
     ],
     "emulator_cpuset": "34-35,70-71",
     "numa_memory": {
@@ -306,34 +309,39 @@ ETL and task processing - handles data transformation, batch jobs, and coordinat
 
 ### Resource Allocation
 
-- **vCPUs**: 8 (4 physical cores with hyperthreading)
-- **CPU Pinning**: Threads 30-33, 66-69 (cores 12-15 on socket 1)
+- **vCPUs**: 12 (6 physical cores with hyperthreading)
+- **CPU Pinning**: Threads 28-33, 64-69 (cores 10-15 on socket 1)
 - **Emulator**: Threads 34-35, 70-71 (shared)
 - **Memory**: 24 GB (strict binding to NUMA node 1)
 - **Storage**: 40 GB SSD (OS + applications)
 
 ### Workload Characteristics
 
-- **Type**: Mixed (CPU, I/O)
-- **Pattern**: Batch processing, coordination
-- **Latency**: Less sensitive
+- **Type**: Mixed (K3s control plane + batch processing)
+- **Pattern**: K3s API requests + batch jobs, coordination
+- **Latency**: Medium (API server should be responsive)
 - **Cache**: Shared L3 cache with VM2, VM3
+- **Additional**: Hosts K3s etcd, API server, scheduler, controller-manager
 
 ### K8s Configuration
 
 ```yaml
-# Node taint
+# Node taints (control plane + workload)
 taints:
+  - key: "node-role.kubernetes.io/control-plane"
+    effect: "NoSchedule"
   - key: "workload"
     value: "tasks"
     effect: "NoSchedule"
 
-# Pod toleration
+# Task pod toleration
 tolerations:
   - key: "workload"
     operator: "Equal"
     value: "tasks"
     effect: "NoSchedule"
+
+# K3s system pods automatically tolerate control-plane taint
 ```
 
 ---

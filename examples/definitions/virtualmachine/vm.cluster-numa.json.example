@@ -34,7 +34,7 @@
     },
     {
       "name": "k3s-worker-data",
-      "vcpu_count": 16,
+      "vcpu_count": 12,
       "memory_mb": 61440,
       "disk_path": "/var/lib/libvirt/images/data.qcow2",
       "disk_size_gb": 40,
@@ -45,7 +45,7 @@
       "tuning": {
         "vcpu_pins": [
           "18", "54", "19", "55", "20", "56", "21", "57",
-          "22", "58", "23", "59", "24", "60", "25", "61"
+          "22", "58", "23", "59"
         ],
         "emulator_cpuset": "34-35,70-71",
         "numa_memory": {
@@ -74,7 +74,7 @@
       "role": "worker",
       "tuning": {
         "vcpu_pins": [
-          "26", "62", "27", "63", "28", "64", "29", "65"
+          "24", "60", "25", "61", "26", "62", "27", "63"
         ],
         "emulator_cpuset": "34-35,70-71",
         "numa_memory": {
@@ -92,18 +92,19 @@
       ]
     },
     {
-      "name": "k3s-worker-tasks",
-      "vcpu_count": 8,
+      "name": "k3s-server-tasks",
+      "vcpu_count": 12,
       "memory_mb": 24576,
-      "disk_path": "/var/lib/libvirt/images/tasks.qcow2",
+      "disk_path": "/var/lib/libvirt/images/server-tasks.qcow2",
       "disk_size_gb": 40,
       "base_image_path": "/var/lib/libvirt/images/base.qcow2",
       "bridge_network_interface": "br0",
-      "cloud_init_iso_path": "/var/lib/libvirt/images/tasks-cloud-init.iso",
-      "role": "worker",
+      "cloud_init_iso_path": "/var/lib/libvirt/images/server-tasks-cloud-init.iso",
+      "role": "server",
       "tuning": {
         "vcpu_pins": [
-          "30", "66", "31", "67", "32", "68", "33", "69"
+          "28", "64", "29", "65", "30", "66", "31", "67",
+          "32", "68", "33", "69"
         ],
         "emulator_cpuset": "34-35,70-71",
         "numa_memory": {

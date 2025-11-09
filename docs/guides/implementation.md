@@ -55,9 +55,122 @@ lscpu | grep "Thread(s) per core"
 
 ---
 
-## Phase 2: Prepare Base Image
+## Phase 2: Configure CPU Isolation
 
-### Step 2.1: Create Base VM Image
+### Step 2.1: Calculate CPU Isolation
+
+**Critical for performance!** We need to isolate VM CPUs from the host scheduler using the `isolcpus` kernel parameter.
+
+**Our CPU Allocation:**
+
+```
+Node 0 (Socket 0):
+├─ VM1 (slm-heavy): threads 0-15, 36-51 (cores 0-15)
+├─ Emulator:         threads 16-17, 52-53 (cores 16-17)
+└─ Host:            (minimal, uses leftover capacity)
+
+Node 1 (Socket 1):
+├─ VM2 (data):      threads 18-23, 54-59 (cores 0-5)
+├─ VM3 (slm):       threads 24-27, 60-63 (cores 6-9)
+├─ VM4 (tasks):     threads 28-33, 64-69 (cores 10-15)
+├─ Emulator:        threads 34-35, 70-71 (cores 16-17, shared)
+└─ Host:            (minimal, uses leftover capacity)
+```
+
+**Threads to Isolate:** All VM threads + emulator threads = `0-17,36-53,18-35,54-71`
+
+Simplified: `0-35,36-71` (all threads except... wait, that's all of them!)
+
+Actually, we want to isolate **only VM threads**, leaving emulator threads for host scheduler flexibility:
+
+**Final isolation:** `0-15,18-33,36-51,54-69` (VM threads only)
+
+### Step 2.2: Configure GRUB
+
+Edit the GRUB configuration file:
+
+```bash
+# Open GRUB config
+sudo vi /etc/default/grub
+```
+
+Find the `GRUB_CMDLINE_LINUX` line and add `isolcpus`:
+
+```bash
+# Before:
+GRUB_CMDLINE_LINUX="quiet splash"
+
+# After:
+GRUB_CMDLINE_LINUX="quiet splash isolcpus=0-15,18-33,36-51,54-69"
+```
+
+**Additional Recommended Parameters:**
+
+```bash
+# For even better performance, add these as well:
+GRUB_CMDLINE_LINUX="quiet splash isolcpus=0-15,18-33,36-51,54-69 nohz_full=0-15,18-33,36-51,54-69 rcu_nocbs=0-15,18-33,36-51,54-69"
+```
+
+**Parameter Explanation:**
+- `isolcpus`: Prevents host scheduler from using these CPUs for normal processes
+- `nohz_full`: Reduces timer interrupts on isolated CPUs (adaptive tickless mode)
+- `rcu_nocbs`: Offloads RCU callbacks to housekeeping CPUs (reduces noise)
+
+### Step 2.3: Rebuild GRUB and Reboot
+
+```bash
+# Rebuild GRUB configuration
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+
+# Or on some systems:
+sudo update-grub
+
+# Reboot to apply changes
+sudo reboot
+```
+
+### Step 2.4: Verify CPU Isolation
+
+After reboot, verify the configuration:
+
+```bash
+# Check kernel command line
+cat /proc/cmdline | grep isolcpus
+# Should show: isolcpus=0-15,18-33,36-51,54-69
+
+# Check isolated CPUs
+cat /sys/devices/system/cpu/isolated
+# Should show: 0-15,18-33,36-51,54-69
+
+# Verify host is NOT using isolated CPUs
+# Run a stress test and check which CPUs are used
+taskset -c 16-17,34-35,52-53,70-71 stress-ng --cpu 8 --timeout 10s &
+top -H
+# Only CPUs 16,17,34,35,52,53,70,71 should show activity
+
+# Check which CPUs the init process can use
+taskset -cp 1
+# Should show: pid 1's current affinity list: 16,17,34,35,52,53,70,71
+# (NOT the isolated CPUs)
+```
+
+**Expected Results:**
+- ✅ Kernel command line contains `isolcpus`
+- ✅ `/sys/devices/system/cpu/isolated` lists your VM CPUs
+- ✅ Host processes (`systemd`, `sshd`, etc.) are bound to non-isolated CPUs
+- ✅ Isolated CPUs show 0% usage when VMs are idle
+
+**If verification fails:**
+1. Double-check GRUB config syntax (no spaces in CPU ranges)
+2. Ensure GRUB rebuild command completed successfully
+3. Verify system uses GRUB (not another bootloader)
+4. Check `dmesg | grep isolcpus` for kernel messages
+
+---
+
+## Phase 3: Prepare Base Image
+
+### Step 3.1: Create Base VM Image
 
 ```bash
 cd /var/lib/libvirt/images
@@ -70,7 +183,7 @@ wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.i
 # cp /path/to/your/base.qcow2 ./base.qcow2
 ```
 
-### Step 2.2: Customize Base Image (Optional)
+### Step 3.2: Customize Base Image (Optional)
 
 ```bash
 # Install required packages
@@ -81,9 +194,9 @@ virt-customize -a base.qcow2 \
 
 ---
 
-## Phase 3: Create VM Configuration
+## Phase 4: Create VM Configuration
 
-### Step 3.1: Create Configuration File
+### Step 4.1: Create Configuration File
 
 Create `definitions/homelab/virtualmachine/vm.cluster-numa.json`:
 
@@ -96,15 +209,15 @@ See `examples/definitions/virtualmachine/vm.cluster-numa.json.example` for full 
 - Set `numa_memory.nodeset` to NUMA node (0 or 1)
 - Set `numa_memory.mode` to `"strict"`
 
-### Step 3.2: Create Cloud-Init Configs
+### Step 4.2: Create Cloud-Init Configs
 
 Create cloud-init ISO for each VM with SSH keys and initial setup.
 
 ---
 
-## Phase 4: Create and Start VMs
+## Phase 5: Create and Start VMs
 
-### Step 4.1: Create VMs
+### Step 5.1: Create VMs
 
 ```bash
 cd /home/nnurry/code/homonculus
@@ -150,7 +263,7 @@ virsh domifaddr k3s-worker-slm-heavy --source agent
 
 ---
 
-## Phase 5: Configure VM2 (Data Node) Storage
+## Phase 6: Configure VM2 (Data Node) Storage
 
 ### Step 5.1: Create Hot Tier Disk
 
@@ -214,7 +327,7 @@ sudo chown -R $(whoami):$(whoami) /data/lake
 
 ---
 
-## Phase 6: Install and Configure PostgreSQL
+## Phase 7: Install and Configure PostgreSQL
 
 ### Step 6.1: Install PostgreSQL (VM2)
 
@@ -266,7 +379,7 @@ sudo -u postgres /usr/lib/postgresql/14/bin/pg_ctl \
 
 ---
 
-## Phase 7: Install K3s
+## Phase 8: Install K3s
 
 ### Step 7.1: Install K3s on Master Node (Pick One VM)
 
@@ -315,7 +428,7 @@ kubectl get nodes
 
 ---
 
-## Phase 8: Apply Kubernetes Taints
+## Phase 9: Apply Kubernetes Taints
 
 ### Step 8.1: Taint Nodes
 
@@ -342,7 +455,7 @@ kubectl describe node k3s-worker-slm-heavy | grep Taints
 
 ---
 
-## Phase 9: Deploy Application
+## Phase 10: Deploy Application
 
 ### Step 9.1: Create SLM Deployment
 
@@ -453,7 +566,7 @@ kubectl get pods -o wide
 
 ---
 
-## Phase 10: Configure System Tuning
+## Phase 11: Configure System Tuning
 
 ### Step 10.1: Disable NUMA Balancing (Host)
 
@@ -498,7 +611,7 @@ sudo chmod +x /etc/rc.local
 
 ---
 
-## Phase 11: Set Up Monitoring
+## Phase 12: Set Up Monitoring
 
 ### Step 11.1: Install Monitoring Tools (Host)
 
@@ -572,7 +685,7 @@ echo "*/5 * * * * /usr/local/bin/staging-cleanup-monitor.sh" | crontab -
 
 ---
 
-## Phase 12: Verify Performance
+## Phase 13: Verify Performance
 
 ### Step 12.1: Check NUMA Locality
 

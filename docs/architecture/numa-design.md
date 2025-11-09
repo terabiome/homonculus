@@ -179,12 +179,12 @@ Coordinator:
 
 ## Resource Allocation Summary
 
-| VM | NUMA | Cores | Threads | Memory | SSD | HDD | Workload |
-|----|------|-------|---------|--------|-----|-----|----------|
-| slm-heavy | 0 | 16 | 32 | 118GB | 40GB | - | Heavy SLM ensemble |
-| data | 1 | 8 | 16 | 60GB | 120GB | 8TB | DB + Lake |
-| slm | 1 | 4 | 8 | 32GB | 40GB | - | SLM inference |
-| tasks | 1 | 4 | 8 | 24GB | 40GB | - | ETL processing |
+| VM | NUMA | Cores | Threads | Memory | SSD | HDD | Role | Workload |
+|----|------|-------|---------|--------|-----|-----|------|----------|
+| slm-heavy | 0 | 16 | 32 | 118GB | 40GB | - | Worker | Heavy SLM ensemble |
+| data | 1 | 6 | 12 | 60GB | 120GB | 8TB | Worker | DB + Lake |
+| slm | 1 | 4 | 8 | 32GB | 40GB | - | Worker | Light SLM inference |
+| server-tasks | 1 | 6 | 12 | 24GB | 40GB | - | Server | K3s control plane + heavy parallel processing |
 | Emulator (N0) | 0 | 2 | 4 | - | - | - | VM1 emulator+host |
 | Emulator (N1) | 1 | 2 | 4 | - | - | - | VM2-4 emulator+host |
 | **TOTAL** | - | 36 | 72 | 234GB | 280GB | 8TB | - |
