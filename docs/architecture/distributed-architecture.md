@@ -532,6 +532,27 @@ Recommendation: Not worth the cost
 - VM specifications: `docs/architecture/vm-specifications.md`
 - Storage design: `docs/architecture/storage-design.md`
 - Implementation guide: `docs/guides/implementation.md`
+- Distributed workflow: `docs/guides/distributed-workflow.md`
+- **Finance use case:** `docs/use-cases/finance-ensemble.md` ⭐
+
+---
+
+## Example Use Cases
+
+### **Finance Data Analysis**
+
+See detailed documentation: `docs/use-cases/finance-ensemble.md`
+
+```
+Application: Financial market analysis
+Models: 3 large (7-9B) + 4 small (<5B) heterogeneous ensemble
+Context: 25k tokens (default), 50k for special events
+Processing: 3-4 minutes per analysis
+Decision window: 30-60 minutes from data to action
+Parallel: 2-3 symbols analyzed simultaneously
+
+Perfect for: Cryptocurrency, stocks, commodities analysis
+```
 
 ---
 

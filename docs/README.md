@@ -68,6 +68,15 @@ This documentation describes high-performance Kubernetes cluster architectures d
    - Multiple NUMA memory modes (strict/preferred)
    - Emulator pinning examples
 
+### Use Case Documentation
+
+9. **[Finance Data Analysis with SLM Ensemble](use-cases/finance-ensemble.md)** (`docs/use-cases/finance-ensemble.md`) ⭐ **NEW**
+   - Heterogeneous SLM ensemble (3 large + 4 small models)
+   - Financial market analysis with 30-60 minute decision windows
+   - Weighted consensus and confidence scoring
+   - Risk management thresholds
+   - Production deployment configuration
+
 ## Quick Start
 
 ### Choose Your Architecture
