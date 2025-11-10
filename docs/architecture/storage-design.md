@@ -48,23 +48,23 @@ HDD (8TB):
 
 ```
 /data/hot (80GB SSD):
-├─ /data/hot/postgresql: 20-40GB
-│   ├─ Database files (tables, indexes)
-│   ├─ Write-ahead log (WAL)
-│   └─ pg_stat, pg_xlog
-│
-├─ /data/hot/staging: 2-4GB
+├─ /data/hot/staging: 4-8GB
 │   ├─ Intermediate SLM results (compressed parquet)
 │   ├─ Cross-checking staging files
 │   └─ Temporary computation results
 │
-└─ Free space: 36-58GB (buffer for growth)
+├─ /data/hot/clean: 20-40GB
+│   ├─ Recently processed clean data
+│   ├─ Frequently accessed query results
+│   └─ Active zone schemas and metadata
+│
+└─ Free space: 32-56GB (buffer for growth)
 ```
 
 **Access Pattern:**
-- PostgreSQL: Random reads/writes (queries, transactions)
 - Staging: Sequential writes, random reads (inference → staging → cross-check)
-- High frequency: 1000s of operations per second
+- Clean zone: Random reads/writes (query processing, result caching)
+- High frequency: 100s-1000s of operations per hour
 
 **Performance:**
 - Read latency: ~100-500 μs
@@ -82,13 +82,16 @@ HDD (8TB):
 
 ```
 /data/lake (8TB HDD):
-├─ /data/lake/results: Final aggregated results
-│   ├─ Organized by date: YYYY/MM/DD/
-│   └─ Parquet files with zstd compression
+├─ /data/lake/clean: Clean, processed data with schemas
+│   ├─ Organized by zone: bronze, silver, gold
+│   ├─ Parquet files with zstd compression
+│   ├─ Schema documentation (JSON/YAML metadata)
+│   └─ Data quality metrics
 │
 ├─ /data/lake/archive: Historical data
 │   ├─ Old inference results
-│   └─ Audit logs
+│   ├─ Audit logs
+│   └─ Backup snapshots
 │
 └─ /data/lake/raw: Raw ingestion data
     └─ Unprocessed input data
@@ -114,11 +117,11 @@ Applications must explicitly route data to hot vs cold tier:
 
 ```python
 # Hot tier paths (SSD)
-POSTGRESQL_DIR = "/data/hot/postgresql"
 STAGING_DIR = "/data/hot/staging"
+CLEAN_CACHE_DIR = "/data/hot/clean"
 
 # Cold tier paths (HDD)
-LAKE_RESULTS_DIR = "/data/lake/results"
+LAKE_CLEAN_DIR = "/data/lake/clean"
 LAKE_ARCHIVE_DIR = "/data/lake/archive"
 LAKE_RAW_DIR = "/data/lake/raw"
 
@@ -127,11 +130,21 @@ def write_intermediate(slm_id, batch_id, data):
     path = f"{STAGING_DIR}/slm_{slm_id}_{batch_id}.parquet"
     data.to_parquet(path, compression="zstd", compression_level=3)
 
-# Example: Final result to lake
-def write_final(batch_id, data):
+# Example: Write clean data to lake with schema
+def write_clean_data(zone, table_name, data, schema_metadata):
+    """
+    zone: 'bronze', 'silver', or 'gold'
+    """
     date_path = datetime.now().strftime("%Y/%m/%d")
-    path = f"{LAKE_RESULTS_DIR}/{date_path}/batch_{batch_id}.parquet"
-    data.to_parquet(path, compression="zstd", compression_level=5)
+    data_path = f"{LAKE_CLEAN_DIR}/{zone}/{table_name}/{date_path}/data.parquet"
+    schema_path = f"{LAKE_CLEAN_DIR}/{zone}/{table_name}/schema.json"
+    
+    # Write data
+    data.to_parquet(data_path, compression="zstd", compression_level=5)
+    
+    # Write schema metadata
+    with open(schema_path, 'w') as f:
+        json.dump(schema_metadata, f, indent=2)
 ```
 
 ### Data Lifecycle
@@ -141,8 +154,8 @@ def write_final(batch_id, data):
 2. Inference results → /data/hot/staging (SSD, temporary)
 3. Cross-checking → Read from /data/hot/staging (SSD)
 4. Staging cleanup → Delete after aggregation
-5. Final results → /data/lake/results (HDD, permanent)
-6. PostgreSQL data → /data/hot/postgresql (SSD, permanent)
+5. Final clean data → /data/lake/clean/{zone} (HDD, permanent, with schema)
+6. Hot cache → /data/hot/clean (SSD, frequently accessed clean data)
 ```
 
 ---
@@ -167,8 +180,8 @@ LVM cached volume:
 
 **2. Cache thrashing risk**
 - Intermediate files: 700MB-2.8GB per batch
-- PostgreSQL hot data: 20-40GB
-- Staging + DB > 80GB → constant evictions
+- Clean data cache: 20-40GB
+- Staging + cache > 80GB → constant evictions
 
 **3. Writethrough mode required (no UPS)**
 - Writeback mode = data loss risk
@@ -178,14 +191,14 @@ LVM cached volume:
 **4. Complexity without benefit**
 - Cache hit/miss unpredictable
 - Hard to debug performance issues
-- PostgreSQL performance varies based on cache state
+- Clean data access patterns vary by workload
 
 ### Decision: Explicit Tiering
 
 **Benefits:**
 - ✅ Predictable performance (apps know hot vs cold)
 - ✅ Simple to understand and debug
-- ✅ PostgreSQL always on SSD (critical!)
+- ✅ Clean data cache on SSD (fast queries)
 - ✅ Staging always on SSD (cross-checking performance)
 - ✅ No cache thrashing risk
 - ✅ No data loss risk
@@ -243,6 +256,59 @@ With compression (3-5x):
 
 ---
 
+## Data Lake Zones
+
+### Zone Architecture
+
+The data lake follows the medallion architecture with bronze, silver, and gold zones:
+
+```
+/data/lake/clean/:
+├─ bronze/: Raw, minimally processed data
+│   ├─ Ingested with minimal transformation
+│   ├─ Source system structure preserved
+│   └─ Append-only, immutable
+│
+├─ silver/: Cleaned, validated data
+│   ├─ Data quality rules applied
+│   ├─ Schema standardization
+│   └─ Deduplication and validation
+│
+└─ gold/: Business-ready, aggregated data
+    ├─ Ready for analysis and querying
+    ├─ Optimized for specific use cases
+    └─ Denormalized and aggregated
+```
+
+### Schema Management
+
+Each table in the lake includes schema metadata:
+
+```json
+{
+  "table_name": "slm_predictions",
+  "zone": "silver",
+  "version": "1.2.0",
+  "created_at": "2025-11-10T12:00:00Z",
+  "schema": {
+    "fields": [
+      {"name": "timestamp", "type": "timestamp", "nullable": false},
+      {"name": "slm_id", "type": "int32", "nullable": false},
+      {"name": "prediction", "type": "float64", "nullable": false},
+      {"name": "confidence", "type": "float64", "nullable": true}
+    ],
+    "partition_by": ["date"]
+  },
+  "quality_metrics": {
+    "completeness": 0.98,
+    "accuracy": 0.95,
+    "last_validated": "2025-11-10T12:00:00Z"
+  }
+}
+```
+
+---
+
 ## Filesystem Configuration
 
 ### Hot Tier (/data/hot)
@@ -279,57 +345,6 @@ LABEL=lake-storage /data/lake ext4 defaults,noatime,commit=60 0 2
 - `noatime`: Reduce writes on HDD
 - `commit=60`: Sync every 60s instead of 5s (less seek overhead)
 - `-m 1`: Reserve only 1% for root (default 5% wastes space on 8TB)
-
----
-
-## PostgreSQL Configuration
-
-### Data Directory
-
-```bash
-# Initialize on hot tier
-sudo -u postgres initdb -D /data/hot/postgresql
-```
-
-### Configuration (/data/hot/postgresql/postgresql.conf)
-
-```ini
-# Memory settings (60GB VM)
-shared_buffers = 15GB           # 25% of RAM
-effective_cache_size = 45GB     # 75% of RAM (includes OS cache)
-work_mem = 256MB                # Per operation
-maintenance_work_mem = 2GB      # For VACUUM, CREATE INDEX
-
-# Connection settings
-max_connections = 200
-
-# WAL settings (on SSD, can be aggressive)
-wal_buffers = 16MB
-checkpoint_timeout = 15min
-checkpoint_completion_target = 0.9
-max_wal_size = 4GB
-
-# Query planner
-random_page_cost = 1.1          # SSD is fast for random access
-effective_io_concurrency = 200  # SSD can handle many concurrent I/O
-
-# Logging (minimal for performance)
-logging_collector = on
-log_directory = '/data/hot/postgresql/log'
-log_filename = 'postgresql-%Y-%m-%d.log'
-log_rotation_age = 1d
-log_min_duration_statement = 1000  # Log queries > 1s
-```
-
-### Backup Strategy
-
-```bash
-# Daily backup to lake (cold tier)
-pg_dump dbname | gzip > /data/lake/archive/backup-$(date +%Y%m%d).sql.gz
-
-# Keep last 30 days on HDD
-find /data/lake/archive -name "backup-*.sql.gz" -mtime +30 -delete
-```
 
 ---
 
@@ -400,25 +415,29 @@ iostat -x 1
 df -h /data/hot
 
 # Alert if > 90% full
-# PostgreSQL needs free space for temp tables
+# Staging and clean cache need free space
 ```
 
-### PostgreSQL Performance
+### Data Lake Query Performance
 
-```sql
--- Check cache hit ratio (should be > 95%)
-SELECT 
-  sum(heap_blks_read) as heap_read,
-  sum(heap_blks_hit) as heap_hit,
-  sum(heap_blks_hit) / (sum(heap_blks_hit) + sum(heap_blks_read)) as cache_hit_ratio
-FROM pg_statio_user_tables;
+Query parquet files using tools like DuckDB or Polars:
 
--- Check slow queries
-SELECT query, mean_exec_time, calls
-FROM pg_stat_statements
-WHERE mean_exec_time > 1000  -- > 1 second
-ORDER BY mean_exec_time DESC
-LIMIT 10;
+```python
+import duckdb
+
+# Query clean data from lake
+conn = duckdb.connect()
+result = conn.execute("""
+    SELECT * 
+    FROM read_parquet('/data/lake/clean/silver/slm_predictions/**/*.parquet')
+    WHERE date >= '2025-11-01'
+    LIMIT 10
+""").fetchdf()
+
+# Check query performance
+conn.execute("PRAGMA enable_profiling")
+# Run query
+conn.execute("PRAGMA show_profiling")
 ```
 
 ---
@@ -444,31 +463,31 @@ find /data/hot/staging -name "*.parquet" -mtime +1 -delete
 systemctl status staging-cleanup.timer
 ```
 
-### PostgreSQL Slow Queries
+### Data Lake Query Slow
 
-**Symptom:** Queries taking > 1 second
+**Symptom:** Queries on parquet files taking too long
 
 **Check:**
-```sql
--- Check if indexes are being used
-EXPLAIN ANALYZE SELECT ...;
-
--- Check for table bloat
-SELECT schemaname, tablename, 
-       pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
-FROM pg_tables
-WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+```python
+# Check file sizes
+import os
+for root, dirs, files in os.walk('/data/lake/clean'):
+    for f in files:
+        if f.endswith('.parquet'):
+            path = os.path.join(root, f)
+            size_mb = os.path.getsize(path) / 1024 / 1024
+            print(f"{path}: {size_mb:.2f} MB")
 ```
+
+**Possible causes:**
+- Files too small (< 10MB) → too many files, slow scan
+- Files too large (> 500MB) → can't leverage partitioning
+- No partitioning by frequently queried columns
 
 **Fix:**
-```sql
--- Vacuum and analyze
-VACUUM ANALYZE;
-
--- Reindex if needed
-REINDEX TABLE tablename;
-```
+- Compact small files into 100-200MB files
+- Add partitioning by date/category
+- Use Hive-style partitioning: `/zone/table/year=2025/month=11/`
 
 ### HDD Saturation
 
@@ -495,15 +514,15 @@ iostat -x 1 /dev/vdc
 ### If Budget Allows
 
 **1. Larger hot tier (200-500GB SSD)**
-- Benefit: More PostgreSQL cache, larger staging buffer
+- Benefit: More clean data cache, larger staging buffer
 - Cost: ~$20-50 for 256GB SATA SSD
 
 **2. NVMe for hot tier**
 - Benefit: 3-5x faster than SATA SSD (~3000 MB/s vs 500 MB/s)
 - Cost: ~$50-80 for 500GB NVMe
 
-**3. Separate PostgreSQL + staging SSDs**
-- Benefit: No I/O contention between DB and staging
+**3. Separate clean cache + staging SSDs**
+- Benefit: No I/O contention between cache and staging
 - Cost: 2× smaller SSDs instead of 1× large
 
 **4. LVM cache with larger cache tier**
@@ -518,15 +537,16 @@ iostat -x 1 /dev/vdc
 - ✅ Explicit hot (SSD) / cold (HDD) tiering
 - ✅ Application-level routing
 - ✅ Compression for intermediate data (3-5x)
-- ✅ PostgreSQL on SSD with tuned config
+- ✅ Data lake with medallion zones (bronze/silver/gold)
+- ✅ Schema documentation with every table
 - ✅ Aggressive staging cleanup
 - ✅ Simple, predictable, maintainable
 
 **Performance expectations:**
 - Hot tier: ~500 MB/s, <500μs latency
 - Cold tier: ~150 MB/s, ~5-10ms latency
-- PostgreSQL cache hit: >95%
-- Staging overhead: <5% of hot tier
+- Lake query: Fast with proper partitioning
+- Staging overhead: <10% of hot tier
 
 **This design achieves 90% performance target!** 🎯
 

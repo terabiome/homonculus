@@ -313,83 +313,32 @@ echo "LABEL=lake-storage /data/lake ext4 defaults,noatime,commit=60 0 2" | \
   sudo tee -a /etc/fstab
 
 # Create directories
-sudo mkdir -p /data/hot/postgresql
+sudo mkdir -p /data/hot/clean
 sudo mkdir -p /data/hot/staging
-sudo mkdir -p /data/lake/results
+sudo mkdir -p /data/lake/clean/bronze
+sudo mkdir -p /data/lake/clean/silver
+sudo mkdir -p /data/lake/clean/gold
 sudo mkdir -p /data/lake/archive
 sudo mkdir -p /data/lake/raw
 
 # Set permissions
-sudo chown -R postgres:postgres /data/hot/postgresql
-sudo chown -R $(whoami):$(whoami) /data/hot/staging
+sudo chown -R $(whoami):$(whoami) /data/hot
 sudo chown -R $(whoami):$(whoami) /data/lake
 ```
 
 ---
 
-## Phase 7: Install and Configure PostgreSQL
-
-### Step 6.1: Install PostgreSQL (VM2)
-
-```bash
-ssh admin@<vm2-ip>
-
-# Install PostgreSQL
-sudo apt update
-sudo apt install -y postgresql-14
-
-# Stop default instance
-sudo systemctl stop postgresql
-```
-
-### Step 6.2: Initialize on Hot Tier
-
-```bash
-# Initialize new cluster on SSD
-sudo -u postgres /usr/lib/postgresql/14/bin/initdb \
-  -D /data/hot/postgresql
-
-# Configure postgresql.conf
-sudo tee -a /data/hot/postgresql/postgresql.conf <<EOF
-
-# Memory settings
-shared_buffers = 15GB
-effective_cache_size = 45GB
-work_mem = 256MB
-maintenance_work_mem = 2GB
-
-# Connection settings
-max_connections = 200
-listen_addresses = '*'
-
-# WAL settings
-wal_buffers = 16MB
-checkpoint_timeout = 15min
-max_wal_size = 4GB
-
-# Performance
-random_page_cost = 1.1
-effective_io_concurrency = 200
-EOF
-
-# Start PostgreSQL
-sudo -u postgres /usr/lib/postgresql/14/bin/pg_ctl \
-  -D /data/hot/postgresql -l /data/hot/postgresql/logfile start
-```
-
----
-
-## Phase 8: Install K3s
+## Phase 7: Install K3s
 
 ### Step 7.1: Install K3s on Master Node (Pick One VM)
 
-Choose VM1 as master (or create separate master VM):
+Choose VM4 (`k3s-server-tasks`) as the K3s server node:
 
 ```bash
-ssh admin@<vm1-ip>
+ssh admin@<vm4-ip>
 
-# Install K3s
-curl -sfL https://get.k3s.io | sh -
+# Install K3s (server mode)
+curl -sfL https://get.k3s.io | sh -s - server --disable traefik
 
 # Get join token
 sudo cat /var/lib/rancher/k3s/server/node-token
@@ -401,34 +350,31 @@ On each worker VM:
 
 ```bash
 # VM1 (slm-heavy)
-curl -sfL https://get.k3s.io | K3S_URL=https://<master-ip>:6443 \
+curl -sfL https://get.k3s.io | K3S_URL=https://<vm4-ip>:6443 \
   K3S_TOKEN=<token> sh -
 
 # VM2 (data)
-curl -sfL https://get.k3s.io | K3S_URL=https://<master-ip>:6443 \
+curl -sfL https://get.k3s.io | K3S_URL=https://<vm4-ip>:6443 \
   K3S_TOKEN=<token> sh -
 
 # VM3 (slm)
-curl -sfL https://get.k3s.io | K3S_URL=https://<master-ip>:6443 \
-  K3S_TOKEN=<token> sh -
-
-# VM4 (tasks)
-curl -sfL https://get.k3s.io | K3S_URL=https://<master-ip>:6443 \
+curl -sfL https://get.k3s.io | K3S_URL=https://<vm4-ip>:6443 \
   K3S_TOKEN=<token> sh -
 ```
 
 ### Step 7.3: Verify Cluster
 
 ```bash
-# On master
+# On server (VM4)
 kubectl get nodes
 
 # Should show all 4 nodes as Ready
+# Note: VM4 is both server and available for workloads
 ```
 
 ---
 
-## Phase 9: Apply Kubernetes Taints
+## Phase 8: Apply Kubernetes Taints
 
 ### Step 8.1: Taint Nodes
 
@@ -455,7 +401,7 @@ kubectl describe node k3s-worker-slm-heavy | grep Taints
 
 ---
 
-## Phase 10: Deploy Application
+## Phase 9: Deploy Application
 
 ### Step 9.1: Create SLM Deployment
 
@@ -511,62 +457,19 @@ spec:
             type: Directory
 ```
 
-### Step 9.2: Create Database Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgresql
-spec:
-  serviceName: postgresql
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgresql
-  template:
-    metadata:
-      labels:
-        app: postgresql
-    spec:
-      tolerations:
-        - key: "workload"
-          operator: "Equal"
-          value: "data"
-          effect: "NoSchedule"
-      nodeSelector:
-        kubernetes.io/hostname: k3s-worker-data
-      containers:
-        - name: postgresql
-          image: postgres:14
-          env:
-            - name: PGDATA
-              value: /data/hot/postgresql
-          volumeMounts:
-            - name: postgresql-data
-              mountPath: /data/hot/postgresql
-      volumes:
-        - name: postgresql-data
-          hostPath:
-            path: /data/hot/postgresql
-            type: Directory
-```
-
-### Step 9.3: Deploy
+### Step 9.2: Deploy
 
 ```bash
 kubectl apply -f slm-deployment.yaml
-kubectl apply -f postgresql-statefulset.yaml
 
 # Verify
 kubectl get pods -o wide
-# Check that SLM pods are on slm nodes
-# Check that DB pod is on data node
+# Check that SLM pods are distributed across slm nodes
 ```
 
 ---
 
-## Phase 11: Configure System Tuning
+## Phase 10: Configure System Tuning
 
 ### Step 10.1: Disable NUMA Balancing (Host)
 
@@ -611,7 +514,7 @@ sudo chmod +x /etc/rc.local
 
 ---
 
-## Phase 12: Set Up Monitoring
+## Phase 11: Set Up Monitoring
 
 ### Step 11.1: Install Monitoring Tools (Host)
 
@@ -685,7 +588,7 @@ echo "*/5 * * * * /usr/local/bin/staging-cleanup-monitor.sh" | crontab -
 
 ---
 
-## Phase 13: Verify Performance
+## Phase 12: Verify Performance
 
 ### Step 12.1: Check NUMA Locality
 
@@ -774,16 +677,24 @@ numastat -c qemu-kvm
 # - Check applications aren't requesting cross-NUMA memory
 ```
 
-### PostgreSQL Slow
+### Data Lake Query Performance
 
 **Check:**
-```sql
--- Check cache hit ratio
-SELECT sum(heap_blks_hit) / (sum(heap_blks_hit) + sum(heap_blks_read)) 
-FROM pg_statio_user_tables;
+```bash
+# On data node (VM2)
+cd /data/lake/clean
+find . -name "*.parquet" -exec ls -lh {} \; | head -20
 
--- Should be > 0.95 (95%)
+# Look for:
+# - Too many small files (< 10MB)
+# - Very large files (> 500MB)
+# - Missing partitioning structure
 ```
+
+**Fix:**
+- Compact small files
+- Add partitioning by date/category
+- Use Hive-style partitions for better query performance
 
 ---
 
@@ -811,9 +722,10 @@ cd /var/lib/libvirt/images
 
 1. Monitor performance for 24-48 hours
 2. Tune based on actual workload patterns
-3. Implement backup strategy for PostgreSQL
+3. Implement backup strategy for data lake
 4. Set up alerting for critical metrics
-5. Document any application-specific configurations
+5. Document data schemas and quality rules
+6. Implement data catalog for lake zones
 
 ---
 

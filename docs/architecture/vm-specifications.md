@@ -101,7 +101,7 @@ tolerations:
 ## VM2: k3s-worker-data
 
 ### Purpose
-Database (PostgreSQL) and data lake storage - handles structured data queries and bulk data storage.
+Data lake storage and processing - handles data ingestion, processing, and storage in a lakehouse architecture.
 
 ### Specifications
 
@@ -155,19 +155,24 @@ Database (PostgreSQL) and data lake storage - handles structured data queries an
 └─ /tmp: Temporary staging
 
 /dev/vdb (80GB SSD): Hot storage
-├─ /data/hot/postgresql: 20-40GB (database files)
-├─ /data/hot/staging: 2-4GB (compressed intermediate files)
-└─ Free space: 36-58GB buffer
+├─ /data/hot/clean: 20-40GB (frequently accessed clean data)
+├─ /data/hot/staging: 4-8GB (compressed intermediate files)
+└─ Free space: 32-56GB buffer
 
 /dev/vdc (8TB HDD): Cold storage
-└─ /data/lake: Parquet files, archives
+└─ /data/lake: Parquet files with schemas, archives
+    ├─ clean/bronze: Raw ingested data
+    ├─ clean/silver: Cleaned, validated data
+    ├─ clean/gold: Business-ready aggregated data
+    ├─ archive: Historical data
+    └─ raw: Unprocessed input data
 ```
 
 ### Workload Characteristics
 
 - **Type**: Mixed (CPU, memory, I/O)
-- **Pattern**: Database queries + bulk writes
-- **Latency**: Moderate (DB queries critical)
+- **Pattern**: Data lake queries + bulk writes
+- **Latency**: Moderate (lake queries important, not critical)
 - **Cache**: Shared L3 cache with VM3, VM4
 
 ### K8s Configuration
@@ -185,17 +190,6 @@ tolerations:
     operator: "Equal"
     value: "data"
     effect: "NoSchedule"
-```
-
-### PostgreSQL Configuration
-
-```ini
-# /data/hot/postgresql/postgresql.conf
-shared_buffers = 15GB          # 25% of 60GB
-effective_cache_size = 45GB     # 75% of 60GB
-work_mem = 256MB
-maintenance_work_mem = 2GB
-max_connections = 200
 ```
 
 ---

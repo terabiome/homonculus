@@ -23,10 +23,10 @@ This documentation describes a high-performance, NUMA-aware Kubernetes cluster d
 
 3. **[Storage Design](architecture/storage-design.md)** (`docs/architecture/storage-design.md`)
    - Hot/cold storage tiering strategy
-   - Data placement decisions
-   - Compression settings
-   - PostgreSQL configuration
-   - Storage performance monitoring
+  - Data placement decisions
+  - Compression settings
+  - Data lake zones and schemas
+  - Storage performance monitoring
 
 ### Implementation Guides
 
@@ -115,8 +115,8 @@ Copy and customize [vm.cluster-numa.json.example](../examples/definitions/virtua
 
 ### VM2: Data Worker (Node 1)
 - **Resources**: 6 cores (12 threads), 60GB RAM, 80GB SSD + 8TB HDD
-- **Workload**: PostgreSQL database + data lake
-- **Characteristics**: Mixed CPU/I/O, database queries, bulk writes
+- **Workload**: Data lake storage and processing
+- **Characteristics**: Mixed CPU/I/O, lake queries, bulk writes
 
 ### VM3: Light SLM Worker (Node 1)
 - **Resources**: 4 cores (8 threads), 32GB RAM
@@ -166,8 +166,8 @@ virsh domstats --vcpu <vm-name>
 # Memory usage per NUMA node
 numastat -m
 
-# PostgreSQL performance
-psql -c "SELECT * FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10;"
+# Data lake structure
+ls -lhR /data/lake/clean/
 
 # Staging directory size
 du -sh /data/hot/staging
@@ -187,7 +187,7 @@ du -sh /data/hot/staging
 
 3. **Storage performance**
    - Verify hot data on SSD (`/data/hot`)
-   - Check PostgreSQL cache hit ratio (should be > 95%)
+   - Check lake query performance with partitioning
    - Monitor staging directory cleanup
 
 4. **Variable latency**
@@ -211,7 +211,7 @@ This documentation is maintained as part of the `homonculus` project. For update
 - [NUMA Architecture (Wikipedia)](https://en.wikipedia.org/wiki/Non-uniform_memory_access)
 - [Libvirt Domain XML Format](https://libvirt.org/formatdomain.html)
 - [KVM Performance Tuning](https://www.linux-kvm.org/page/Tuning)
-- [PostgreSQL Performance Tuning](https://wiki.postgresql.org/wiki/Performance_Optimization)
+- [Data Lakehouse Architecture](https://www.databricks.com/glossary/data-lakehouse)
 - [Parquet Compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
 
 ### Project Files

@@ -122,9 +122,10 @@ All 7 SLMs perform cross-checking:
 Coordinator:
 ├─ Reads all cross-check results
 ├─ Forms final aggregated result
-└─ Writes to:
-    ├─ PostgreSQL (/data/hot/postgresql) for structured data
-    └─ Data lake (/data/lake) for raw/archive data
+└─ Writes to data lake (/data/lake) in appropriate zones:
+    ├─ /data/lake/clean/silver: Validated data
+    ├─ /data/lake/clean/gold: Aggregated business-ready data
+    └─ /data/lake/archive: Historical data
 ```
 
 ## Key Design Principles
@@ -162,8 +163,8 @@ Coordinator:
 **Problem:** 80GB SSD + 8TB HDD, working set ~50-80GB
 
 **Solution:**
-- ✅ Explicit hot tier (80GB SSD): PostgreSQL + staging
-- ✅ Explicit cold tier (8TB HDD): data lake
+- ✅ Explicit hot tier (80GB SSD): Clean data cache + staging
+- ✅ Explicit cold tier (8TB HDD): data lake with medallion zones
 - ✅ No cache complexity (no LVM cache thrashing)
 - ✅ Application controls data placement
 
@@ -232,7 +233,7 @@ Coordinator:
 **If budget allows:**
 1. **More SSD** (200-500GB) → Larger hot tier
 2. **NVMe** → 3-5x faster than SATA SSD
-3. **More RAM** → Larger PostgreSQL cache
+3. **More RAM** → Larger clean data cache and OS page cache
 4. **10GbE networking** → Faster cross-VM transfers
 
 **Current design already excellent for 90% target!**
