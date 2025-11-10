@@ -4,34 +4,42 @@
 
 This documentation describes high-performance Kubernetes cluster architectures designed for running Small Language Model (SLM) inference workloads with data processing.
 
-**Two deployment options:**
+**Three deployment options:**
+- **Mac + NUMA Cluster:** Hybrid setup with Mac Mini as control plane + NUMA workers (cost-effective)
 - **Single Machine:** All workloads on one NUMA-aware machine (original design)
-- **Distributed:** Compute workers (NUMA) + data server (UMA) connected via network (recommended for production)
+- **Distributed:** Compute workers (NUMA) + data server (UMA) connected via network (if you have multiple servers)
 
 ## Documentation Structure
 
 ### Architecture Documentation
 
-1. **[NUMA Design](architecture/numa-design.md)** (`docs/architecture/numa-design.md`)
+1. **[Mac + NUMA K3s Architecture](architecture/mac-numa-k3s-architecture.md)** (`docs/architecture/mac-numa-k3s-architecture.md`) ⭐ **RECOMMENDED**
+   - Hybrid Mac Mini (control plane) + NUMA server (workers)
+   - 2-VM compute cluster (pure SLM workers)
+   - Co-located Temporal workers
+   - VictoriaLogs/VictoriaMetrics monitoring
+   - Cost-effective for home labs
+
+2. **[NUMA Design](architecture/numa-design.md)** (`docs/architecture/numa-design.md`)
    - Single-machine architecture overview
    - NUMA-aware data flow
    - Design principles and trade-offs
    - Expected performance metrics
 
-2. **[Distributed Architecture](architecture/distributed-architecture.md)** (`docs/architecture/distributed-architecture.md`) ⭐ **NEW**
+3. **[Distributed Architecture](architecture/distributed-architecture.md)** (`docs/architecture/distributed-architecture.md`)
    - Two-machine distributed design
    - Compute/storage separation
    - Network data flow
    - Worker cluster + data server architecture
 
-3. **[VM Specifications](architecture/vm-specifications.md)** (`docs/architecture/vm-specifications.md`)
+4. **[VM Specifications](architecture/vm-specifications.md)** (`docs/architecture/vm-specifications.md`)
    - Detailed specifications for each VM
    - CPU pinning configurations
    - Memory allocation
    - Performance tuning parameters
    - Monitoring and troubleshooting
 
-4. **[Storage Design](architecture/storage-design.md)** (`docs/architecture/storage-design.md`)
+5. **[Storage Design](architecture/storage-design.md)** (`docs/architecture/storage-design.md`)
    - Hot/cold storage tiering strategy
    - Data placement decisions
    - Compression settings
@@ -40,7 +48,15 @@ This documentation describes high-performance Kubernetes cluster architectures d
 
 ### Implementation Guides
 
-5. **[Implementation Guide](guides/implementation.md)** (`docs/guides/implementation.md`)
+6. **[Mac + NUMA Deployment Guide](guides/mac-numa-deployment.md)** (`docs/guides/mac-numa-deployment.md`) ⭐ **START HERE**
+   - Complete step-by-step deployment for Mac + NUMA cluster
+   - Mac Mini setup and configuration
+   - NUMA server VM creation
+   - K3s cluster setup
+   - Service deployment (MinIO, Victoria*, Temporal)
+   - Verification and troubleshooting
+
+7. **[Implementation Guide](guides/implementation.md)** (`docs/guides/implementation.md`)
    - Step-by-step deployment instructions (single machine)
    - System verification
    - VM creation and configuration
@@ -48,7 +64,7 @@ This documentation describes high-performance Kubernetes cluster architectures d
    - K8s cluster setup
    - Performance verification
 
-6. **[Distributed Workflow Guide](guides/distributed-workflow.md)** (`docs/guides/distributed-workflow.md`) ⭐ **NEW**
+8. **[Distributed Workflow Guide](guides/distributed-workflow.md)** (`docs/guides/distributed-workflow.md`)
    - End-to-end workflow for distributed architecture
    - Daily data preparation
    - Job execution with Temporal
@@ -57,20 +73,24 @@ This documentation describes high-performance Kubernetes cluster architectures d
 
 ### Example Configurations
 
-7. **[VM Cluster Configuration](../examples/definitions/virtualmachine/vm.cluster-numa.json.example)**
+9. **[Mac + NUMA VM Definitions](../definitions/mac-numa-cluster/)** ⭐ **NEW**
+   - VM1: SLM Worker 1 (18 cores, 120GB, NUMA node 0)
+   - VM2: SLM Worker 2 (18 cores, 120GB, NUMA node 1)
+
+10. **[VM Cluster Configuration](../examples/definitions/virtualmachine/vm.cluster-numa.json.example)**
    - Complete example configuration for all 4 VMs (single machine)
    - CPU pinning settings
    - NUMA memory bindings
    - Emulator CPU allocation
 
-8. **[Cluster with Tuning](../examples/definitions/virtualmachine/vm-cluster.tuning.json.example)**
+11. **[Cluster with Tuning](../examples/definitions/virtualmachine/vm-cluster.tuning.json.example)**
    - General-purpose example showing tuning options
    - Multiple NUMA memory modes (strict/preferred)
    - Emulator pinning examples
 
 ### Use Case Documentation
 
-9. **[Finance Data Analysis with SLM Ensemble](use-cases/finance-ensemble.md)** (`docs/use-cases/finance-ensemble.md`) ⭐ **NEW**
+12. **[Finance Data Analysis with SLM Ensemble](use-cases/finance-ensemble.md)** (`docs/use-cases/finance-ensemble.md`)
    - Heterogeneous SLM ensemble (3 large + 4 small models)
    - Financial market analysis with 30-60 minute decision windows
    - Weighted consensus and confidence scoring
@@ -81,14 +101,25 @@ This documentation describes high-performance Kubernetes cluster architectures d
 
 ### Choose Your Architecture
 
-**Option 1: Single Machine (Original Design)**
+**Option 1: Mac + NUMA Cluster (Recommended for Home Lab)** ⭐
+- ✅ Cost-effective (repurpose Mac Mini)
+- ✅ Clean separation (control vs compute)
+- ✅ Power-efficient (Mac for lightweight services)
+- ✅ 2-VM setup (simple, symmetric, powerful)
+- ✅ 68 vCPUs total (34 per VM, 4 threads reserved for emulators)
+- ✅ Co-located Temporal workers (local filesystem access)
+- ✅ Resource guarantees prevent CPU starvation
+- ⚠️ Mac has only 8GB RAM (tight but works)
+- 📚 Read: [Mac + NUMA Architecture](architecture/mac-numa-k3s-architecture.md) + [Deployment Guide](guides/mac-numa-deployment.md)
+
+**Option 2: Single Machine (Original Design)**
 - ✅ All-in-one deployment
 - ✅ Simpler to set up
 - ✅ No network dependencies
 - ⚠️ Compute and storage compete for resources
 - 📚 Read: [NUMA Design](architecture/numa-design.md) + [Implementation Guide](guides/implementation.md)
 
-**Option 2: Distributed (Recommended for Production)**
+**Option 3: Distributed (If You Have Multiple Servers)**
 - ✅ Clean separation: compute vs. storage
 - ✅ Better resource utilization
 - ✅ Data processing local to lake (zero remote I/O)

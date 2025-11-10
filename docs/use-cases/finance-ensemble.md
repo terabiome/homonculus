@@ -2,7 +2,12 @@
 
 ## Overview
 
-This document describes the deployment and operation of a **heterogeneous SLM ensemble** for financial data analysis using the distributed two-machine architecture. The system analyzes market data within trading windows (30-60 minutes) and provides weighted consensus predictions.
+This document describes the deployment and operation of a **heterogeneous SLM ensemble** for financial data analysis. The system analyzes market data within trading windows (30-60 minutes) and provides weighted consensus predictions.
+
+**Note:** This guide is architecture-agnostic and works with:
+- **Mac + NUMA K3s Cluster** (recommended): See `docs/architecture/mac-numa-k3s-architecture.md`
+- **Single NUMA Machine**: See `docs/architecture/numa-design.md`
+- **Distributed Two-Machine**: See `docs/architecture/distributed-architecture.md` (if you have a separate data server)
 
 ---
 

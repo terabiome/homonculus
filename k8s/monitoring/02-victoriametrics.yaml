@@ -1,0 +1,161 @@
+---
+# PersistentVolume for VictoriaMetrics
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: victoriametrics-pv
+  labels:
+    type: local
+    service: victoriametrics
+spec:
+  capacity:
+    storage: 50Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/datalake/victoria-metrics
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - mac-master
+
+---
+# PersistentVolumeClaim for VictoriaMetrics
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: victoriametrics-pvc
+  namespace: monitoring
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# VictoriaMetrics Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victoriametrics
+  namespace: monitoring
+  labels:
+    app: victoriametrics
+    component: metrics
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: victoriametrics
+  template:
+    metadata:
+      labels:
+        app: victoriametrics
+        component: metrics
+    spec:
+      nodeSelector:
+        role: master  # Pin to Mac Mini
+      
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      
+      containers:
+      - name: victoriametrics
+        image: victoriametrics/victoria-metrics:latest
+        imagePullPolicy: IfNotPresent
+        
+        args:
+        - "-storageDataPath=/victoria-metrics-data"
+        - "-retentionPeriod=7d"
+        - "-memory.allowedPercent=50"
+        - "-httpListenAddr=:8428"
+        
+        ports:
+        - containerPort: 8428
+          name: http
+          protocol: TCP
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        
+        volumeMounts:
+        - name: storage
+          mountPath: /victoria-metrics-data
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8428
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8428
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: victoriametrics-pvc
+
+---
+# VictoriaMetrics Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics
+  namespace: monitoring
+  labels:
+    app: victoriametrics
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8428
+    targetPort: 8428
+    protocol: TCP
+    name: http
+  selector:
+    app: victoriametrics
+
+---
+# VictoriaMetrics Service (NodePort for UI access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics-external
+  namespace: monitoring
+  labels:
+    app: victoriametrics
+spec:
+  type: NodePort
+  ports:
+  - port: 8428
+    targetPort: 8428
+    nodePort: 30828
+    protocol: TCP
+    name: http
+  selector:
+    app: victoriametrics
+
+

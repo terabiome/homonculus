@@ -1,0 +1,168 @@
+---
+# PersistentVolume for Temporal
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: temporal-pv
+  labels:
+    type: local
+    service: temporal
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/datalake/temporal
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - mac-master
+
+---
+# PersistentVolumeClaim for Temporal
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: temporal-pvc
+  namespace: temporal
+spec:
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Temporal Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: temporal
+  labels:
+    app: temporal
+    component: server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+        component: server
+    spec:
+      nodeSelector:
+        role: master  # Pin to Mac Mini
+      
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      
+      containers:
+      - name: temporal
+        image: temporalio/auto-setup:latest
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: DB
+          value: "sqlite"
+        - name: SQLITE_PRAGMA_journal_mode
+          value: "WAL"
+        - name: NUM_HISTORY_SHARDS
+          value: "1"  # Minimal for home lab
+        - name: TEMPORAL_BROADCAST_ADDRESS
+          value: "0.0.0.0"
+        - name: DYNAMIC_CONFIG_FILE_PATH
+          value: "/etc/temporal/config/dynamicconfig/development.yaml"
+        
+        ports:
+        - containerPort: 7233
+          name: frontend
+          protocol: TCP
+        - containerPort: 7234
+          name: history
+          protocol: TCP
+        - containerPort: 7235
+          name: matching
+          protocol: TCP
+        - containerPort: 7239
+          name: worker
+          protocol: TCP
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1536Mi"
+            cpu: "1000m"
+        
+        volumeMounts:
+        - name: storage
+          mountPath: /etc/temporal
+        
+        livenessProbe:
+          tcpSocket:
+            port: 7233
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        
+        readinessProbe:
+          tcpSocket:
+            port: 7233
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+      
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: temporal-pvc
+
+---
+# Temporal Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: temporal
+  labels:
+    app: temporal
+spec:
+  type: ClusterIP
+  ports:
+  - port: 7233
+    targetPort: 7233
+    protocol: TCP
+    name: frontend
+  - port: 7234
+    targetPort: 7234
+    protocol: TCP
+    name: history
+  - port: 7235
+    targetPort: 7235
+    protocol: TCP
+    name: matching
+  - port: 7239
+    targetPort: 7239
+    protocol: TCP
+    name: worker
+  selector:
+    app: temporal
+
+
