@@ -2,60 +2,97 @@
 
 ## Overview
 
-This documentation describes a high-performance, NUMA-aware Kubernetes cluster designed for running Small Language Model (SLM) inference workloads with database and ETL processing.
+This documentation describes high-performance Kubernetes cluster architectures designed for running Small Language Model (SLM) inference workloads with data processing.
+
+**Two deployment options:**
+- **Single Machine:** All workloads on one NUMA-aware machine (original design)
+- **Distributed:** Compute workers (NUMA) + data server (UMA) connected via network (recommended for production)
 
 ## Documentation Structure
 
 ### Architecture Documentation
 
 1. **[NUMA Design](architecture/numa-design.md)** (`docs/architecture/numa-design.md`)
-   - High-level architecture overview
+   - Single-machine architecture overview
    - NUMA-aware data flow
    - Design principles and trade-offs
    - Expected performance metrics
 
-2. **[VM Specifications](architecture/vm-specifications.md)** (`docs/architecture/vm-specifications.md`)
+2. **[Distributed Architecture](architecture/distributed-architecture.md)** (`docs/architecture/distributed-architecture.md`) ⭐ **NEW**
+   - Two-machine distributed design
+   - Compute/storage separation
+   - Network data flow
+   - Worker cluster + data server architecture
+
+3. **[VM Specifications](architecture/vm-specifications.md)** (`docs/architecture/vm-specifications.md`)
    - Detailed specifications for each VM
    - CPU pinning configurations
    - Memory allocation
    - Performance tuning parameters
    - Monitoring and troubleshooting
 
-3. **[Storage Design](architecture/storage-design.md)** (`docs/architecture/storage-design.md`)
+4. **[Storage Design](architecture/storage-design.md)** (`docs/architecture/storage-design.md`)
    - Hot/cold storage tiering strategy
-  - Data placement decisions
-  - Compression settings
-  - Data lake zones and schemas
-  - Storage performance monitoring
+   - Data placement decisions
+   - Compression settings
+   - Data lake zones and schemas
+   - Storage performance monitoring
 
 ### Implementation Guides
 
-4. **[Implementation Guide](guides/implementation.md)** (`docs/guides/implementation.md`)
-   - Step-by-step deployment instructions
+5. **[Implementation Guide](guides/implementation.md)** (`docs/guides/implementation.md`)
+   - Step-by-step deployment instructions (single machine)
    - System verification
    - VM creation and configuration
    - Storage setup
    - K8s cluster setup
    - Performance verification
 
+6. **[Distributed Workflow Guide](guides/distributed-workflow.md)** (`docs/guides/distributed-workflow.md`) ⭐ **NEW**
+   - End-to-end workflow for distributed architecture
+   - Daily data preparation
+   - Job execution with Temporal
+   - Result aggregation
+   - Monitoring and troubleshooting
+
 ### Example Configurations
 
-5. **[VM Cluster Configuration](../examples/definitions/virtualmachine/vm.cluster-numa.json.example)**
-   - Complete example configuration for all 4 VMs
+7. **[VM Cluster Configuration](../examples/definitions/virtualmachine/vm.cluster-numa.json.example)**
+   - Complete example configuration for all 4 VMs (single machine)
    - CPU pinning settings
    - NUMA memory bindings
    - Emulator CPU allocation
 
-6. **[Cluster with Tuning](../examples/definitions/virtualmachine/vm-cluster.tuning.json.example)**
+8. **[Cluster with Tuning](../examples/definitions/virtualmachine/vm-cluster.tuning.json.example)**
    - General-purpose example showing tuning options
    - Multiple NUMA memory modes (strict/preferred)
    - Emulator pinning examples
 
 ## Quick Start
 
+### Choose Your Architecture
+
+**Option 1: Single Machine (Original Design)**
+- ✅ All-in-one deployment
+- ✅ Simpler to set up
+- ✅ No network dependencies
+- ⚠️ Compute and storage compete for resources
+- 📚 Read: [NUMA Design](architecture/numa-design.md) + [Implementation Guide](guides/implementation.md)
+
+**Option 2: Distributed (Recommended for Production)**
+- ✅ Clean separation: compute vs. storage
+- ✅ Better resource utilization
+- ✅ Data processing local to lake (zero remote I/O)
+- ✅ Workers can scale horizontally
+- ⚠️ Requires two machines + network
+- 📚 Read: [Distributed Architecture](architecture/distributed-architecture.md) + [Distributed Workflow](guides/distributed-workflow.md)
+
+---
+
 ### 1. Read Architecture Documentation
 
-Start with [NUMA Design](architecture/numa-design.md) to understand the overall architecture and design decisions.
+**For single machine:** Start with [NUMA Design](architecture/numa-design.md)  
+**For distributed:** Start with [Distributed Architecture](architecture/distributed-architecture.md)
 
 ### 2. Review VM Specifications
 
