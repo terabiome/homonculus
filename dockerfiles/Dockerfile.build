@@ -1,0 +1,10 @@
+ARG BASE_IMAGE
+
+FROM $BASE_IMAGE
+
+ENV GOPATH=/app/go
+
+COPY . /app/homonculus
+WORKDIR /app/homonculus
+
+RUN go build -o $GOPATH/bin/homonculus ./cmd

@@ -5,12 +5,13 @@ export IMAGE_NAME=homonculus:base-$TAG
 
 /bin/bash ./scripts/container.prebuild.sh
 
+export BASE_IMAGE_NAME=homonculus:base-$TAG
 export IMAGE_NAME=homonculus:$TAG
+
 export WORKDIR=/app/homonculus
 
-$CONTAINER_EXEC run \
-    -it \
-    --rm \
-    -v $(pwd):$WORKDIR:Z \
-    --workdir $WORKDIR \
-    localhost/$IMAGE_NAME $@
+$CONTAINER_EXEC build \
+    --build-arg BASE_IMAGE=$BASE_IMAGE_NAME \
+    -f dockerfiles/Dockerfile.build \
+    -t $IMAGE_NAME .
+

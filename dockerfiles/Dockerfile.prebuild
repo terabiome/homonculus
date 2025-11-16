@@ -13,13 +13,8 @@ RUN curl -LO https://golang.org/dl/go1.25.4.linux-amd64.tar.gz && \
     rm go1.25.4.linux-amd64.tar.gz
 
 ENV GOROOT=/usr/local/go
-ENV PATH=$PATH:$GOROOT/bin
+ENV GOPATH=/app/go
+ENV PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 
 RUN mkdir -p /app/go/bin && chown -R $USER:$USER /app
 WORKDIR /app
-
-RUN ["/bin/bash", "-c", "\
-    echo 'export GOPATH=/app/go' >> /root/.bashrc && \
-    echo 'export PATH=$PATH:$GOPATH/bin' >> /root/.bashrc \
-"]
-
