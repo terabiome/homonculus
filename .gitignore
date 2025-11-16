@@ -2,7 +2,7 @@
 **/libvirt-*.xml
 
 # User-specific homelab definitions
-definitions/homelab/
+definitions/**
 
 # Keep .gitkeep file in homelab
 !definitions/homelab/**/.gitkeep
