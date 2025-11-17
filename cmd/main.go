@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,9 +14,11 @@ import (
 
 	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/internal/config"
+	"github.com/terabiome/homonculus/internal/handler"
 	"github.com/terabiome/homonculus/internal/infrastructure/cloudinit"
 	"github.com/terabiome/homonculus/internal/infrastructure/disk"
 	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
+	"github.com/terabiome/homonculus/internal/routes"
 	"github.com/terabiome/homonculus/internal/service"
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/k3s"
@@ -78,19 +81,34 @@ func main() {
 		Usage:                "Provision and manage libvirt virtual machines",
 		EnableBashCompletion: true,
 		Commands: []*cli.Command{
-		{
-			Name:  "system",
-			Usage: "Show system information",
-			Subcommands: []*cli.Command{
-				{
-					Name:  "cpu-topology",
-					Usage: "Display CPU and NUMA topology information",
-					Action: func(cliCtx *cli.Context) error {
-						return runSystemInfo()
+			{
+				Name:  "server",
+				Usage: "Start HTTP API server",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "address",
+						Aliases: []string{"a"},
+						Usage:   "Server address",
+						Value:   ":8080",
+					},
+				},
+				Action: func(cliCtx *cli.Context) error {
+					return runServer(ctx, cfg, log, cliCtx.String("address"))
+				},
+			},
+			{
+				Name:  "system",
+				Usage: "Show system information",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "cpu-topology",
+						Usage: "Display CPU and NUMA topology information",
+						Action: func(cliCtx *cli.Context) error {
+							return runSystemInfo()
+						},
 					},
 				},
 			},
-		},
 			{
 				Name:  "virtualmachine",
 				Usage: "Execute VM-related functions",
@@ -493,4 +511,56 @@ func initVMService(cfg *config.Config, log *slog.Logger) (*service.VMService, er
 		connManager,
 		log,
 	), nil
+}
+
+// runServer starts the HTTP API server
+func runServer(ctx context.Context, cfg *config.Config, log *slog.Logger, address string) error {
+	log.Info("initializing HTTP server", slog.String("address", address))
+
+	// Initialize VM service
+	vmService, err := initVMService(cfg, log)
+	if err != nil {
+		return fmt.Errorf("failed to initialize VM service: %w", err)
+	}
+
+	// Initialize handlers
+	vmHandler := handler.NewVirtualMachine(vmService, log)
+	k3sHandler := handler.NewK3s(log)
+	systemHandler := handler.NewSystem(log)
+
+	// Setup router
+	router := routes.SetupMux(vmHandler, k3sHandler, systemHandler)
+
+	// Create HTTP server
+	server := &http.Server{
+		Addr:         address,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start server in a goroutine
+	serverErrChan := make(chan error, 1)
+	go func() {
+		log.Info("HTTP server starting", slog.String("address", address))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrChan <- fmt.Errorf("server error: %w", err)
+		}
+	}()
+
+	// Wait for shutdown signal or server error
+	select {
+	case err := <-serverErrChan:
+		return err
+	case <-ctx.Done():
+		log.Info("shutting down HTTP server")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("server shutdown error: %w", err)
+		}
+		log.Info("HTTP server stopped")
+		return nil
+	}
 }
