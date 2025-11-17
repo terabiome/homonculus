@@ -13,3 +13,8 @@ FROM $BASE_IMAGE
 
 COPY --from=build /app/go/bin/homonculus /app/go/bin/homonculus
 
+COPY templates /app/homonculus/templates
+COPY examples /app/homonculus/examples
+COPY examples/homonculus.yaml.example /app/homonculus/homonculus.yaml
+
+WORKDIR /app/homonculus

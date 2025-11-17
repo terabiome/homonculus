@@ -20,10 +20,10 @@ log_format: text # text, json
 telemetry_enabled: false # true to enable OpenTelemetry tracing and metrics
 
 # Template paths
-libvirt_template: ./templates/libvirt/domain.xml.tpl
-cloudinit_user_data_template: ./templates/cloudinit/user-data.tpl
-cloudinit_meta_data_template: ./templates/cloudinit/meta-data.tpl
-cloudinit_network_config_template: ./templates/cloudinit/network-config.tpl
+libvirt_template: /app/homonculus/templates/libvirt/domain.xml.tpl
+cloudinit_user_data_template: /app/homonculus/templates/cloudinit/user-data.tpl
+cloudinit_meta_data_template: /app/homonculus/templates/cloudinit/meta-data.tpl
+cloudinit_network_config_template: /app/homonculus/templates/cloudinit/network-config.tpl
 
 # Optional: Leave empty to skip
 # cloudinit_meta_data_template: ""
