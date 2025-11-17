@@ -1,6 +1,6 @@
 ARG BASE_IMAGE
 
-FROM $BASE_IMAGE
+FROM $BASE_IMAGE AS build
 
 ENV GOPATH=/app/go
 
@@ -8,3 +8,8 @@ COPY . /app/homonculus
 WORKDIR /app/homonculus
 
 RUN go build -o $GOPATH/bin/homonculus ./cmd
+
+FROM $BASE_IMAGE
+
+COPY --from=build /app/go/bin/homonculus /app/go/bin/homonculus
+

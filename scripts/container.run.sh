@@ -9,6 +9,9 @@ $CONTAINER_EXEC run \
     --rm \
     -v /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock:Z \
     -v /var/lib/libvirt:/var/lib/libvirt:Z \
+    -v $(pwd)/examples:/app/examples \
+    -v $(pwd)/templates:/app/templates:Z \
+    -v $(pwd)/homonculus.yaml:/app/homonculus.yaml:Z \
     --privileged \
-    --entrypoint homonculus \
+    --entrypoint /root/bin/homonculus \
     $IMAGE_NAME $@
