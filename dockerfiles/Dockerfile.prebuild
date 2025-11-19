@@ -6,7 +6,8 @@ RUN dnf update -y \
         libvirt \
         libvirt-devel \
         gcc \
-        tar
+        tar \
+        xorriso
 
 RUN curl -LO https://golang.org/dl/go1.25.4.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go1.25.4.linux-amd64.tar.gz && \
