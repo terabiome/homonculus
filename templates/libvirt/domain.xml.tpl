@@ -69,10 +69,13 @@
         {{- end }}
 
         <!-- Network Interface (VirtIO bridge for high performance) -->
+        {{- if .BridgeNetworkInterface }}
         <interface type='bridge'>
             <source bridge='{{ .BridgeNetworkInterface }}' />
             <model type='virtio' />
         </interface>
+        {{- end }}
+
 
         <graphics type='vnc' port='5901' autoport='yes' listen='0.0.0.0'>
             <listen type='address' address='0.0.0.0'/>
