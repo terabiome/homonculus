@@ -19,12 +19,13 @@ type responseCallback func()
 func parseBodyAndHandleError(writer http.ResponseWriter, request *http.Request, target any, requireBody bool) (responseCallback, error) {
 	if requireBody {
 		if err := json.NewDecoder(request.Body).Decode(target); err != nil {
-			writeResult(writer, http.StatusBadRequest, GenericResponse{
-				Body:    nil,
-				Message: "invalid request body",
-				Error:   err.Error(),
-			})
-			return func() {}, err
+			return func() {
+				writeResult(writer, http.StatusBadRequest, GenericResponse{
+					Body:    nil,
+					Message: "invalid request body",
+					Error:   err.Error(),
+				})
+			}, err
 		}
 	}
 	return func() {}, nil
