@@ -13,3 +13,8 @@ $CONTAINER_EXEC build \
     -f dockerfiles/Dockerfile.build \
     -t $IMAGE_NAME .
 
+export REMOTE_BASE_IMAGE_NAME=docker.io/nhatanhcd2169/terabiome:homonculus-base-$TAG
+export REMOTE_IMAGE_NAME=docker.io/nhatanhcd2169/terabiome:homonculus-$TAG
+
+$CONTAINER_EXEC tag $BASE_IMAGE_NAME $REMOTE_BASE_IMAGE_NAME
+$CONTAINER_EXEC tag $IMAGE_NAME $REMOTE_IMAGE_NAME
