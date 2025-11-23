@@ -17,5 +17,7 @@ type MetaDataTemplateVars struct {
 }
 
 type NetworkConfigTemplateVars struct {
-	Hostname string
+	Hostname           string
+	IPv4Address        string
+	IPv4GatewayAddress string
 }
