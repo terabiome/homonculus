@@ -17,7 +17,6 @@ func (router *Router) V1Handler(vmHandler *handler.VirtualMachine, k3sHandler *h
 
 	// Setup virtual machine routes
 	vmMux := http.NewServeMux()
-	vmMux.HandleFunc("POST /create", vmHandler.Create)
 	vmMux.HandleFunc("POST /create/cluster", vmHandler.CreateCluster)
 	vmMux.HandleFunc("POST /delete/cluster", vmHandler.DeleteCluster)
 	vmMux.HandleFunc("POST /start/cluster", vmHandler.StartCluster)

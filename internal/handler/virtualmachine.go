@@ -23,42 +23,6 @@ func NewVirtualMachine(vmService *service.VMService, logger *slog.Logger) *Virtu
 	}
 }
 
-// Create handles POST /create requests to create a single VM
-func (h *VirtualMachine) Create(writer http.ResponseWriter, request *http.Request) {
-	var createRequest api.CreateClusterRequest
-	cb, err := parseBodyAndHandleError(writer, request, &createRequest, true)
-	if err != nil {
-		cb()
-		return
-	}
-
-	if len(createRequest.VirtualMachines) == 0 {
-		writeResult(writer, http.StatusBadRequest, GenericResponse{
-			Body:    nil,
-			Message: "no virtual machines specified in request",
-		})
-		return
-	}
-
-	// Adapt API contract to service params
-	vmParams := adaptCreateCluster(createRequest)
-
-	ctx := request.Context()
-	if err := h.vmService.CreateCluster(ctx, vmParams); err != nil {
-		writeResult(writer, http.StatusInternalServerError, GenericResponse{
-			Body:    nil,
-			Message: "failed to create virtual machine",
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	writeResult(writer, http.StatusOK, GenericResponse{
-		Body:    createRequest,
-		Message: "created virtual machine successfully",
-	})
-}
-
 // CreateCluster handles POST /create/cluster requests to create multiple VMs
 func (h *VirtualMachine) CreateCluster(writer http.ResponseWriter, request *http.Request) {
 	var createRequest api.CreateClusterRequest
