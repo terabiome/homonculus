@@ -45,6 +45,7 @@ func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 		CloudInitISOPath:       vm.CloudInitISOPath,
 		Role:                   string(vm.Role),
 		UserConfigs:            adaptUserConfigs(vm.UserConfigs),
+		Runcmds:                vm.Runcmds,
 		Tuning:                 tuning,
 	}
 }

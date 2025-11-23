@@ -27,6 +27,7 @@ type CreateVMRequest struct {
 	CloudInitISOPath       string                   `json:"cloud_init_iso_path"`
 	Role                   constants.KubernetesRole `json:"role,omitempty"`
 	UserConfigs            []UserConfig             `json:"user_configs"`
+	Runcmds                []string                 `json:"runcmds"`
 	Tuning                 *VMTuning                `json:"tuning,omitempty"` // VM performance tuning
 }
 

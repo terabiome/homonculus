@@ -20,10 +20,3 @@ users:
     {{- end}}
   {{- end }}
 
-package_update: true
-package_upgrade: true
-
-runcmd:
-  {{- range .Runcmds }}
-  - {{ . }}
-  {{- end }}

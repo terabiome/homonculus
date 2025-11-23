@@ -570,6 +570,7 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 		CloudInitISOPath:       params.CloudInitISOPath,
 		Role:                   constants.KubernetesRole(params.Role),
 		UserConfigs:            userConfigs,
+		Runcmds:                params.Runcmds,
 		Tuning:                 tuning,
 	}
 }

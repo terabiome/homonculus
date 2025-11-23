@@ -9,6 +9,7 @@ type UserDataTemplateVars struct {
 	Hostname    string
 	UserConfigs []api.UserConfig
 	Role        constants.KubernetesRole
+	Runcmds     []string
 }
 
 type MetaDataTemplateVars struct {

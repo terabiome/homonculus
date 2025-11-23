@@ -85,6 +85,7 @@ func (m *Manager) renderUserData(path string, vmRequest api.CreateVMRequest) err
 		Hostname:    vmRequest.Name,
 		UserConfigs: vmRequest.UserConfigs,
 		Role:        vmRequest.Role,
+		Runcmds:     vmRequest.Runcmds,
 	}
 
 	return m.engine.RenderToFile(constants.TemplateCloudInitUserData, path, vars)

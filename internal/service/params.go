@@ -25,6 +25,7 @@ type CreateVMParams struct {
 	CloudInitISOPath       string
 	Role                   string
 	UserConfigs            []UserConfig
+	Runcmds                []string
 	Tuning                 *VMTuning
 }
 

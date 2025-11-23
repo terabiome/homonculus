@@ -12,6 +12,7 @@ type CloudInitTemplatePlaceholder struct {
 	Hostname    string
 	UserConfigs []api.UserConfig
 	Role        constants.KubernetesRole
+	Runcmds     []string
 }
 
 type CloudInitTemplator struct {
