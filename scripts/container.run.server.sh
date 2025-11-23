@@ -8,6 +8,7 @@ $CONTAINER_EXEC run \
     -it \
     --name homonculus \
     --network=host \
+    --detach \
     -v /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock:Z \
     -v /var/lib/libvirt:/var/lib/libvirt:Z \
     -v ~/.ssh:/root/.ssh:ro \
