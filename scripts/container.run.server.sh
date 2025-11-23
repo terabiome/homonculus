@@ -6,11 +6,11 @@ IMAGE_NAME=docker.io/nhatanhcd2169/terabiome:homonculus-$TAG
 
 $CONTAINER_EXEC run \
     -it \
-    --rm \
+    --name homonculus \
     --network=host \
     -v /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock:Z \
     -v /var/lib/libvirt:/var/lib/libvirt:Z \
     -v ~/.ssh:/root/.ssh:ro \
     --privileged \
     --entrypoint homonculus \
-    $IMAGE_NAME $@
+    $IMAGE_NAME server
