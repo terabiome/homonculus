@@ -25,7 +25,7 @@ func (router *Router) V1Handler(vmHandler *handler.VirtualMachine, k3sHandler *h
 	vmMux.HandleFunc("POST /query/cluster", vmHandler.QueryCluster)
 	vmMux.HandleFunc("POST /clone/cluster", vmHandler.CloneCluster)
 	vmMux.HandleFunc("POST /format", vmHandler.FormatRequest)
-	mux.Handle("/virtual-machine/", http.StripPrefix("/virtual-machine", vmMux))
+	mux.Handle("/virtualmachine/", http.StripPrefix("/virtualmachine", vmMux))
 
 	// Setup K3s routes
 	k3sMux := http.NewServeMux()
@@ -55,4 +55,3 @@ func SetupMux(vmHandler *handler.VirtualMachine, k3sHandler *handler.K3s, system
 
 	return &router
 }
-
