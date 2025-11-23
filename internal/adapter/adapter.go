@@ -1,21 +1,19 @@
-package main
+package adapter
 
 import (
 	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/internal/service"
 )
 
-// adaptCreateCluster converts CLI contract to service params
-func adaptCreateCluster(req api.CreateClusterRequest) []service.CreateVMParams {
+func AdaptCreateCluster(req api.CreateClusterRequest) []service.CreateVMParams {
 	params := make([]service.CreateVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
-		params[i] = adaptCreateVM(vm)
+		params[i] = AdaptCreateVM(vm)
 	}
 	return params
 }
 
-// adaptCreateVM converts a single VM create request to service params
-func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
+func AdaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 	var tuning *service.VMTuning
 
 	// Convert tuning configuration if present
@@ -44,14 +42,13 @@ func adaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 		BridgeNetworkInterface: vm.BridgeNetworkInterface,
 		CloudInitISOPath:       vm.CloudInitISOPath,
 		Role:                   string(vm.Role),
-		UserConfigs:            adaptUserConfigs(vm.UserConfigs),
+		UserConfigs:            AdaptUserConfigs(vm.UserConfigs),
 		Runcmds:                vm.Runcmds,
 		Tuning:                 tuning,
 	}
 }
 
-// adaptDeleteCluster converts CLI contract to service params
-func adaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
+func AdaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
 	params := make([]service.DeleteVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.DeleteVMParams{
@@ -61,8 +58,7 @@ func adaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
 	return params
 }
 
-// adaptStartCluster converts CLI contract to service params
-func adaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
+func AdaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
 	params := make([]service.StartVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.StartVMParams{
@@ -72,8 +68,7 @@ func adaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
 	return params
 }
 
-// adaptQueryCluster converts CLI contract to service params
-func adaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
+func AdaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
 	params := make([]service.QueryVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.QueryVMParams{
@@ -83,8 +78,7 @@ func adaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
 	return params
 }
 
-// adaptVMInfoToAPI converts service VMInfo to API VMInfo
-func adaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
+func AdaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
 	result := make([]api.VMInfo, len(vmInfos))
 	for i, info := range vmInfos {
 		disks := make([]api.DiskInfo, len(info.Disks))
@@ -112,8 +106,7 @@ func adaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
 	return result
 }
 
-// adaptCloneCluster converts CLI contract to service params
-func adaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
+func AdaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	targetSpecs := make([]service.TargetVMSpec, len(req.TargetVMs))
 	for i, target := range req.TargetVMs {
 		targetSpecs[i] = service.TargetVMSpec{
@@ -132,8 +125,7 @@ func adaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	}
 }
 
-// adaptUserConfigs converts API user configs to service user configs
-func adaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
+func AdaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
 	result := make([]service.UserConfig, len(configs))
 	for i, c := range configs {
 		result[i] = service.UserConfig{

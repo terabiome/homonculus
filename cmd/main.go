@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/terabiome/homonculus/internal/adapter"
 	"github.com/terabiome/homonculus/internal/api"
 	"github.com/terabiome/homonculus/internal/config"
 	"github.com/terabiome/homonculus/internal/handler"
@@ -156,7 +157,7 @@ func main() {
 							log.Info("creating VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
 							// Adapt CLI contract to service params
-							vmParams := adaptCreateCluster(clusterRequest)
+							vmParams := adapter.AdaptCreateCluster(clusterRequest)
 
 							// Prepare start params if flag is set
 							var startVMs []service.StartVMParams
@@ -215,7 +216,7 @@ func main() {
 							log.Info("deleting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
 							// Adapt CLI contract to service params
-							vmParams := adaptDeleteCluster(clusterRequest)
+							vmParams := adapter.AdaptDeleteCluster(clusterRequest)
 
 							if err := vmService.DeleteCluster(ctx, vmParams); err != nil {
 								return fmt.Errorf("unable to delete virtual machines from template data: %w", err)
@@ -253,7 +254,7 @@ func main() {
 							log.Info("starting VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
 
 							// Adapt CLI contract to service params
-							vmParams := adaptStartCluster(clusterRequest)
+							vmParams := adapter.AdaptStartCluster(clusterRequest)
 
 							if err := vmService.StartCluster(ctx, vmParams); err != nil {
 								return fmt.Errorf("unable to start virtual machines from template data: %w", err)
@@ -290,7 +291,7 @@ func main() {
 								}
 
 								log.Info("querying VM cluster", slog.Int("count", len(clusterRequest.VirtualMachines)))
-								vmParams = adaptQueryCluster(clusterRequest)
+								vmParams = adapter.AdaptQueryCluster(clusterRequest)
 							} else {
 								// No filepath provided, list all VMs
 								log.Info("listing all VMs")
@@ -304,7 +305,7 @@ func main() {
 
 							// Convert service VMInfo to API VMInfo
 							response := api.QueryClusterResponse{
-								VirtualMachines: adaptVMInfoToAPI(vmInfos),
+								VirtualMachines: adapter.AdaptVMInfoToAPI(vmInfos),
 							}
 
 							// Output as JSON
@@ -348,7 +349,7 @@ func main() {
 							)
 
 							// Adapt CLI contract to service params
-							cloneParams := adaptCloneCluster(clusterRequest)
+							cloneParams := adapter.AdaptCloneCluster(clusterRequest)
 
 							if err := vmService.CloneCluster(ctx, cloneParams); err != nil {
 								return fmt.Errorf("unable to clone virtual machines from template data: %w", err)
