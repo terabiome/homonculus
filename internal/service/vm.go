@@ -568,6 +568,8 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 		BaseImagePath:          params.BaseImagePath,
 		BridgeNetworkInterface: params.BridgeNetworkInterface,
 		CloudInitISOPath:       params.CloudInitISOPath,
+		DoPackageUpdate:        params.DoPackageUpdate,
+		DoPackageUpgrade:       params.DoPackageUpgrade,
 		Role:                   constants.KubernetesRole(params.Role),
 		UserConfigs:            userConfigs,
 		Runcmds:                params.Runcmds,

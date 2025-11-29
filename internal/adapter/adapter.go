@@ -42,6 +42,8 @@ func AdaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 		BridgeNetworkInterface: vm.BridgeNetworkInterface,
 		CloudInitISOPath:       vm.CloudInitISOPath,
 		Role:                   string(vm.Role),
+		DoPackageUpdate:        vm.DoPackageUpdate,
+		DoPackageUpgrade:       vm.DoPackageUpgrade,
 		UserConfigs:            AdaptUserConfigs(vm.UserConfigs),
 		Runcmds:                vm.Runcmds,
 		Tuning:                 tuning,

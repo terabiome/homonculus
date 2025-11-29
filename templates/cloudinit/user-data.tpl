@@ -20,8 +20,12 @@ users:
     {{- end}}
   {{- end }}
 
+{{- if .DoPackageUpdate }}
 package_update: true
+{{- end }}
+{{- if .DoPackageUpgrade }}
 package_upgrade: true
+{{- end }}
 
 runcmd:
   {{- range .Runcmds }}

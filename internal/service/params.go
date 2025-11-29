@@ -24,6 +24,8 @@ type CreateVMParams struct {
 	BridgeNetworkInterface string
 	CloudInitISOPath       string
 	Role                   string
+	DoPackageUpdate        bool
+	DoPackageUpgrade       bool
 	UserConfigs            []UserConfig
 	Runcmds                []string
 	Tuning                 *VMTuning

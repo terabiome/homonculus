@@ -82,10 +82,12 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 
 func (m *Manager) renderUserData(path string, vmRequest api.CreateVMRequest) error {
 	vars := UserDataTemplateVars{
-		Hostname:    vmRequest.Name,
-		UserConfigs: vmRequest.UserConfigs,
-		Role:        vmRequest.Role,
-		Runcmds:     vmRequest.Runcmds,
+		Hostname:         vmRequest.Name,
+		UserConfigs:      vmRequest.UserConfigs,
+		Role:             vmRequest.Role,
+		DoPackageUpdate:  vmRequest.DoPackageUpdate,
+		DoPackageUpgrade: vmRequest.DoPackageUpgrade,
+		Runcmds:          vmRequest.Runcmds,
 	}
 
 	return m.engine.RenderToFile(constants.TemplateCloudInitUserData, path, vars)

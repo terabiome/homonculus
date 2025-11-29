@@ -6,10 +6,12 @@ import (
 )
 
 type UserDataTemplateVars struct {
-	Hostname    string
-	UserConfigs []api.UserConfig
-	Role        constants.KubernetesRole
-	Runcmds     []string
+	Hostname         string
+	UserConfigs      []api.UserConfig
+	Role             constants.KubernetesRole
+	DoPackageUpdate  bool
+	DoPackageUpgrade bool
+	Runcmds          []string
 }
 
 type MetaDataTemplateVars struct {

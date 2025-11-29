@@ -26,6 +26,8 @@ type CreateVMRequest struct {
 	BridgeNetworkInterface string                   `json:"bridge_network_interface"`
 	CloudInitISOPath       string                   `json:"cloud_init_iso_path"`
 	Role                   constants.KubernetesRole `json:"role,omitempty"`
+	DoPackageUpdate        bool                     `json:"do_package_update"`
+	DoPackageUpgrade       bool                     `json:"do_package_upgrade"`
 	UserConfigs            []UserConfig             `json:"user_configs"`
 	Runcmds                []string                 `json:"runcmds"`
 	Tuning                 *VMTuning                `json:"tuning,omitempty"` // VM performance tuning
