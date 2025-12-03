@@ -1,0 +1,42 @@
+{
+    "virtual_machines": [
+        {
+            "name": "almalinux-base",
+            "vcpu_count": 2,
+            "memory_mb": 2048,
+            "disk_size_gb": 15,
+            "base_image_path": "/var/lib/libvirt/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+            "disk_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-base-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "do_package_update": true,
+            "do_package_upgrade": true,
+            "user_configs": [
+                {
+                    "username": "<username>",
+                    "ssh_authorized_keys": [
+                        "ssh-ed25519 <key> <name>"
+                    ],
+                    "passwd": "<passwd>"
+                }
+            ],
+            "runcmds": [
+                "sudo dnf install -y epel-release",
+                "sudo dnf install -y qemu-guest-agent firewalld",
+                "sudo systemctl enable --now qemu-guest-agent",
+                "sudo systemctl enable firewalld",
+                "sudo systemctl start firewalld",
+                "sudo firewall-cmd --zone=public --add-port=6443/tcp --permanent",
+                "sudo firewall-cmd --zone=public --add-port=10250/tcp --permanent",
+                "sudo firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16",
+                "sudo firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16",
+                "sudo firewall-cmd reload",
+                "sudo swapoff -a",
+                "sudo sed -i '/swap/d' /etc/fstab",
+                "sudo sh -c 'echo \"net.ipv4.ip_forward=1\" >> /etc/sysctl.conf'",
+                "sudo sh -c 'echo \"net.ipv6.conf.all.forwarding=1\" >> /etc/sysctl.conf'",
+                "sudo sysctl -p"
+            ]
+        }
+    ]
+}

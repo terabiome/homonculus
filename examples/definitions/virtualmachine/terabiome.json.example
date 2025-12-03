@@ -1,0 +1,124 @@
+{
+    "virtual_machines": [
+        {
+            "name": "almalinux-terabiome-k3s-master-1",
+            "vcpu_count": 4,
+            "memory_mb": 8192,
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1.qcow2",
+            "disk_size_gb": 40,
+            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "tuning": {
+                "vcpu_pins": [
+                    "20",
+                    "56",
+                    "21",
+                    "57"
+                ],
+                "emulator_cpuset": "19,55",
+                "numa_memory": {
+                    "nodeset": "1",
+                    "mode": "strict"
+                }
+            },
+            "runcmds": []
+        },
+        {
+            "name": "almalinux-terabiome-slm-worker-1",
+            "vcpu_count": 16,
+            "memory_mb": 65536,
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-1.qcow2",
+            "disk_size_gb": 60,
+            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-1-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "tuning": {
+                "vcpu_pins": [
+                    "2",
+                    "38",
+                    "3",
+                    "39",
+                    "4",
+                    "40",
+                    "5",
+                    "41",
+                    "6",
+                    "42",
+                    "7",
+                    "43",
+                    "8",
+                    "44",
+                    "9",
+                    "45"
+                ],
+                "emulator_cpuset": "1,37",
+                "numa_memory": {
+                    "nodeset": "0",
+                    "mode": "strict"
+                }
+            },
+            "runcmds": []
+        },
+        {
+            "name": "almalinux-terabiome-slm-worker-2",
+            "vcpu_count": 12,
+            "memory_mb": 49152,
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-2.qcow2",
+            "disk_size_gb": 60,
+            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-2-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "tuning": {
+                "vcpu_pins": [
+                    "22",
+                    "58",
+                    "23",
+                    "59",
+                    "24",
+                    "60",
+                    "25",
+                    "61",
+                    "26",
+                    "62",
+                    "27",
+                    "63"
+                ],
+                "emulator_cpuset": "19,55",
+                "numa_memory": {
+                    "nodeset": "1",
+                    "mode": "strict"
+                }
+            },
+            "runcmds": []
+        },
+        {
+            "name": "almalinux-terabiome-data-worker-1",
+            "vcpu_count": 4,
+            "memory_mb": 16384,
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1.qcow2",
+            "disk_size_gb": 40,
+            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "tuning": {
+                "vcpu_pins": [
+                    "28",
+                    "64",
+                    "29",
+                    "65"
+                ],
+                "emulator_cpuset": "30,66",
+                "numa_memory": {
+                    "nodeset": "1",
+                    "mode": "strict"
+                }
+            },
+            "runcmds": [
+                "sudo firewall-cmd --zone=public --add-port=9000/tcp --permanent",
+                "sudo firewall-cmd --zone=public --add-port=9001/tcp --permanent",
+                "sudo firewall-cmd --reload"
+            ]
+        }
+    ]
+}
