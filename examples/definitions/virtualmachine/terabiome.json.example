@@ -1,7 +1,28 @@
 {
     "virtual_machines": [
         {
+            "name": "almalinux-terabiome-slm-worker-2",
+            "description": "NUMA 1: Secondary Inference. 12 vCPU / 36GB RAM.",
+            "vcpu_count": 12,
+            "memory_mb": 36864,
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-2.qcow2",
+            "disk_size_gb": 40,
+            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-2-cloudinit.iso",
+            "bridge_network_interface": "br0",
+            "tuning": {
+                "vcpu_pins": [
+                    "19", "55", "20", "56", "21", "57", "22", "58", "23", "59",
+                    "24", "60"
+                ],
+                "emulator_cpuset": "35,71",
+                "numa_memory": { "nodeset": "1", "mode": "strict" }
+            },
+            "runcmds": []
+        },
+        {
             "name": "almalinux-terabiome-k3s-master-1",
+            "description": "NUMA 1: Control Plane. 4 vCPU / 8GB RAM.",
             "vcpu_count": 4,
             "memory_mb": 8192,
             "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1.qcow2",
@@ -10,16 +31,19 @@
             "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1-cloudinit.iso",
             "bridge_network_interface": "br0",
             "tuning": {
-                "vcpu_pins": ["20", "56", "21", "57"],
-                "emulator_cpuset": "18,54",
+                "vcpu_pins": [
+                    "25", "61", "26", "62"
+                ],
+                "emulator_cpuset": "35,71",
                 "numa_memory": { "nodeset": "1", "mode": "strict" }
             },
             "runcmds": []
         },
         {
             "name": "almalinux-terabiome-orchestrator-worker-1",
-            "vcpu_count": 8,
-            "memory_mb": 32768,
+            "description": "NUMA 1: Temporal + Postgres. 6 vCPU / 12GB RAM.",
+            "vcpu_count": 6,
+            "memory_mb": 12288,
             "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-orchestrator-worker-1.qcow2",
             "disk_size_gb": 60,
             "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
@@ -27,17 +51,18 @@
             "bridge_network_interface": "br0",
             "tuning": {
                 "vcpu_pins": [
-                    "22", "58", "23", "59", "24", "60", "25", "61"
+                    "27", "63", "28", "64", "29", "65"
                 ],
-                "emulator_cpuset": "18,54",
+                "emulator_cpuset": "35,71",
                 "numa_memory": { "nodeset": "1", "mode": "strict" }
-            }
+            },
+            "runcmds": []
         },
         {
             "name": "almalinux-terabiome-data-worker-1",
-            "description": "SeaweedFS + Rclone + Traefik. Pinned to end of Node 1.",
-            "vcpu_count": 6,
-            "memory_mb": 24576,
+            "description": "NUMA 1: SeaweedFS + HDD Passthrough. 4 vCPU / 16GB RAM.",
+            "vcpu_count": 4,
+            "memory_mb": 16384,
             "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1.qcow2",
             "disk_size_gb": 50,
             "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
@@ -48,7 +73,7 @@
             ],
             "tuning": {
                 "vcpu_pins": [
-                    "30", "66", "31", "67", "32", "68"
+                    "30", "66", "31", "67"
                 ],
                 "emulator_cpuset": "35,71",
                 "numa_memory": { "nodeset": "1", "mode": "strict" }
@@ -62,20 +87,18 @@
         },
         {
             "name": "almalinux-terabiome-slm-worker-1",
-            "description": "Pure AI Inference.",
-            "vcpu_count": 32,
-            "memory_mb": 112640,
+            "description": "NUMA 0: Primary Inference. 18 vCPU / 54GB RAM.",
+            "vcpu_count": 18,
+            "memory_mb": 55296,
             "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-1.qcow2",
-            "disk_size_gb": 25,
+            "disk_size_gb": 40,
             "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
             "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-slm-worker-1-cloudinit.iso",
             "bridge_network_interface": "br0",
             "tuning": {
                 "vcpu_pins": [
-                    "1", "37", "2", "38", "3", "39", "4", "40",
-                    "5", "41", "6", "42", "7", "43", "8", "44",
-                    "9", "45", "10", "46", "11", "47", "12", "48",
-                    "13", "49", "14", "50", "15", "51", "16", "52"
+                    "1", "37", "2", "38", "3", "39", "4", "40", "5", "41",
+                    "6", "42", "7", "43", "8", "44", "9", "45"
                 ],
                 "emulator_cpuset": "17,53",
                 "numa_memory": { "nodeset": "0", "mode": "strict" }

@@ -23,6 +23,7 @@
             "runcmds": [
                 "sudo dnf install -y epel-release",
                 "sudo dnf install -y qemu-guest-agent firewalld",
+                "sudo dnf update -y",
                 "sudo systemctl enable --now qemu-guest-agent",
                 "sudo systemctl enable firewalld",
                 "sudo systemctl start firewalld",
@@ -30,7 +31,8 @@
                 "sudo firewall-cmd --zone=public --add-port=10250/tcp --permanent",
                 "sudo firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16",
                 "sudo firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16",
-                "sudo firewall-cmd reload",
+                "sudo firewall-cmd --add-masquerade --permanent",
+                "sudo firewall-cmd --reload",
                 "sudo swapoff -a",
                 "sudo sed -i '/swap/d' /etc/fstab",
                 "sudo sh -c 'echo \"net.ipv4.ip_forward=1\" >> /etc/sysctl.conf'",
