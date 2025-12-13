@@ -13,6 +13,12 @@ type VMTuning struct {
 	NUMAMemory     *NUMAMemory
 }
 
+// HostBindMount contains list of mount points from host on virtual machines
+type HostBindMount struct {
+	SourceDir string
+	TargetDir string
+}
+
 // CreateVMParams contains transport-agnostic parameters for creating a virtual machine.
 type CreateVMParams struct {
 	Name                   string
@@ -23,6 +29,7 @@ type CreateVMParams struct {
 	BaseImagePath          string
 	BridgeNetworkInterface string
 	CloudInitISOPath       string
+	HostBindMounts         []HostBindMount
 	Role                   string
 	DoPackageUpdate        bool
 	DoPackageUpgrade       bool

@@ -34,6 +34,7 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 	var vcpuPins []VCPUPin
 	var emulatorCPUSet string
 	var numaMemory *NUMAMemory
+	var hostBindMounts = make([]HostBindMount, 0)
 
 	// Process tuning configuration if present
 	if request.Tuning != nil {
@@ -83,6 +84,10 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 		}
 	}
 
+	for _, hostBindMount := range request.HostBindMounts {
+		hostBindMounts = append(hostBindMounts, HostBindMount(hostBindMount))
+	}
+
 	vars := LibvirtTemplateVars{
 		Name:                   request.Name,
 		UUID:                   virtualMachineUUID,
@@ -90,6 +95,7 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 		MemoryKiB:              request.MemoryMB << 10,
 		DiskPath:               request.DiskPath,
 		CloudInitISOPath:       request.CloudInitISOPath,
+		HostBindMounts:         hostBindMounts,
 		BridgeNetworkInterface: request.BridgeNetworkInterface,
 		VCPUPins:               vcpuPins,
 		EmulatorCPUSet:         emulatorCPUSet,

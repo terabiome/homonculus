@@ -41,6 +41,7 @@ func AdaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 		BaseImagePath:          vm.BaseImagePath,
 		BridgeNetworkInterface: vm.BridgeNetworkInterface,
 		CloudInitISOPath:       vm.CloudInitISOPath,
+		HostBindMounts:         AdaptHostBindMounts(vm.HostBindMounts),
 		Role:                   string(vm.Role),
 		DoPackageUpdate:        vm.DoPackageUpdate,
 		DoPackageUpgrade:       vm.DoPackageUpgrade,
@@ -134,6 +135,17 @@ func AdaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
 			Username:          c.Username,
 			SSHAuthorizedKeys: c.SSHAuthorizedKeys,
 			Password:          c.Password,
+		}
+	}
+	return result
+}
+
+func AdaptHostBindMounts(configs []api.HostBindMount) []service.HostBindMount {
+	result := make([]service.HostBindMount, len(configs))
+	for i, c := range configs {
+		result[i] = service.HostBindMount{
+			SourceDir: c.SourceDir,
+			TargetDir: c.TargetDir,
 		}
 	}
 	return result

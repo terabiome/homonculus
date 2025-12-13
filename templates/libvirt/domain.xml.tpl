@@ -68,6 +68,16 @@
         </disk>
         {{- end }}
 
+        {{- if .HostBindMounts }}
+            {{- range .HostBindMounts }}
+        <filesystem type='mount' accessmode='passthrough'>
+            <driver type='virtiofs'/>
+            <source dir='{{ .SourceDir }}'/>
+            <target dir='{{ .TargetDir }}'/>
+        </filesystem>
+            {{- end }}
+        {{- end }}
+
         <!-- Network Interface (VirtIO bridge for high performance) -->
         {{- if .BridgeNetworkInterface }}
         <interface type='bridge'>

@@ -15,6 +15,12 @@ type VMTuning struct {
 	NUMAMemory     *NUMAMemory `json:"numa_memory,omitempty"`     // NUMA memory placement
 }
 
+// HostBindMount contains list of mount points from host on virtual machines
+type HostBindMount struct {
+	SourceDir string `json:"source_dir"`
+	TargetDir string `json:"target_dir"`
+}
+
 // CreateVMRequest contains the configuration for creating a single virtual machine.
 type CreateVMRequest struct {
 	Name                   string                   `json:"name"`
@@ -25,6 +31,7 @@ type CreateVMRequest struct {
 	BaseImagePath          string                   `json:"base_image_path"`
 	BridgeNetworkInterface string                   `json:"bridge_network_interface"`
 	CloudInitISOPath       string                   `json:"cloud_init_iso_path"`
+	HostBindMounts         []HostBindMount          `json:"host_bind_mounts"`
 	Role                   constants.KubernetesRole `json:"role,omitempty"`
 	DoPackageUpdate        bool                     `json:"do_package_update"`
 	DoPackageUpgrade       bool                     `json:"do_package_upgrade"`

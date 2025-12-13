@@ -14,6 +14,12 @@ type NUMAMemory struct {
 	Mode    string
 }
 
+// HostBindMount contains list of mount points from host on virtual machines
+type HostBindMount struct {
+	SourceDir string
+	TargetDir string
+}
+
 type LibvirtTemplateVars struct {
 	Name                   string
 	UUID                   uuid.UUID
@@ -23,6 +29,7 @@ type LibvirtTemplateVars struct {
 	DiskPath               string
 	CloudInitISOPath       string
 	VCPUPins               []VCPUPin
+	HostBindMounts         []HostBindMount
 	EmulatorCPUSet         string
 	NUMAMemory             *NUMAMemory
 }
