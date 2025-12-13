@@ -21,14 +21,14 @@
             "runcmds": []
         },
         {
-            "name": "almalinux-terabiome-k3s-master-1",
+            "name": "almalinux-terabiome-grand-master-1",
             "description": "NUMA 1: Control Plane. 4 vCPU / 8GB RAM.",
             "vcpu_count": 4,
             "memory_mb": 8192,
-            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1.qcow2",
+            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-grand-master-1.qcow2",
             "disk_size_gb": 25,
             "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
-            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-k3s-master-1-cloudinit.iso",
+            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-grand-master-1-cloudinit.iso",
             "bridge_network_interface": "br0",
             "tuning": {
                 "vcpu_pins": [
