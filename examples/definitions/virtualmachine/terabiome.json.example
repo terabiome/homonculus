@@ -58,33 +58,33 @@
             },
             "runcmds": []
         },
-        {
-            "name": "almalinux-terabiome-data-worker-1",
-            "description": "NUMA 1: SeaweedFS + HDD Passthrough. 4 vCPU / 16GB RAM.",
-            "vcpu_count": 4,
-            "memory_mb": 16384,
-            "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1.qcow2",
-            "disk_size_gb": 50,
-            "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
-            "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1-cloudinit.iso",
-            "bridge_network_interface": "br0",
-            "passthrough_devices": [
-                 { "type": "disk", "source": "/dev/disk/by-id/ata-YOUR-8TB-HDD-ID" }
-            ],
-            "tuning": {
-                "vcpu_pins": [
-                    "30", "66", "31", "67"
-                ],
-                "emulator_cpuset": "35,71",
-                "numa_memory": { "nodeset": "1", "mode": "strict" }
-            },
-            "runcmds": [
-                "sudo firewall-cmd --zone=public --add-port=8333/tcp --permanent",
-                "sudo firewall-cmd --zone=public --add-port=8888/tcp --permanent",
-                "sudo firewall-cmd --zone=public --add-port=9333/tcp --permanent",
-                "sudo firewall-cmd --reload"
-            ]
-        },
+        // {
+        //     "name": "almalinux-terabiome-data-worker-1",
+        //     "description": "NUMA 1: SeaweedFS + HDD Passthrough. 4 vCPU / 16GB RAM.",
+        //     "vcpu_count": 4,
+        //     "memory_mb": 16384,
+        //     "disk_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1.qcow2",
+        //     "disk_size_gb": 50,
+        //     "base_image_path": "/var/lib/libvirt/images/almalinux-base.qcow2",
+        //     "cloud_init_iso_path": "/var/lib/libvirt/images/almalinux-terabiome-data-worker-1-cloudinit.iso",
+        //     "bridge_network_interface": "br0",
+        //     "passthrough_devices": [
+        //          { "type": "disk", "source": "/dev/disk/by-id/ata-YOUR-8TB-HDD-ID" }
+        //     ],
+        //     "tuning": {
+        //         "vcpu_pins": [
+        //             "30", "66", "31", "67"
+        //         ],
+        //         "emulator_cpuset": "35,71",
+        //         "numa_memory": { "nodeset": "1", "mode": "strict" }
+        //     },
+        //     "runcmds": [
+        //         "sudo firewall-cmd --zone=public --add-port=8333/tcp --permanent",
+        //         "sudo firewall-cmd --zone=public --add-port=8888/tcp --permanent",
+        //         "sudo firewall-cmd --zone=public --add-port=9333/tcp --permanent",
+        //         "sudo firewall-cmd --reload"
+        //     ]
+        // },
         {
             "name": "almalinux-terabiome-slm-worker-1",
             "description": "NUMA 0: Primary Inference. 18 vCPU / 54GB RAM.",
