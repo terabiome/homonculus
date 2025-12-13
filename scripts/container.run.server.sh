@@ -10,7 +10,7 @@ CONTAINER_EXEC_OPTS=(\
     "--name homonculus" \
     "--network=host" \
     "--detach" \
-    "--restart unless-stopped" \
+    "--restart always" \
     "-v /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock:Z" \
     "-v /var/lib/libvirt:/var/lib/libvirt:Z" \
     "-v $SSH_DIRECTORY:/root/.ssh:ro" \
