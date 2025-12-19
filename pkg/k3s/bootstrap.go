@@ -13,6 +13,21 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type LinePrefixer struct {
+	prefix string
+	dest   io.Writer
+	mu     *sync.Mutex
+}
+
+func (p *LinePrefixer) Write(b []byte) (n int, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	formatted := fmt.Sprintf("[%s] %s\n", p.prefix, string(b))
+	_, err = fmt.Fprint(p.dest, formatted)
+	return len(b), err
+}
+
 // BootstrapService handles K3s cluster bootstrapping via SSH.
 type BootstrapService struct {
 	logger *slog.Logger
@@ -71,8 +86,7 @@ func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config contract
 	// Use errgroup for parallel execution with proper error handling
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Mutex to protect output streaming (prevent interleaved output)
-	var outputMutex sync.Mutex
+	var writeMu sync.Mutex
 
 	for i, node := range config.Nodes {
 		// Capture loop variables
@@ -86,7 +100,10 @@ func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config contract
 				slog.String("host", node.Host),
 			)
 
-			if err := s.bootstrapWorker(ctx, node, config.Token, config.MasterURL, &outputMutex); err != nil {
+			nodeStdout := &LinePrefixer{prefix: node.Host, dest: s.stdout, mu: &writeMu}
+			nodeStderr := &LinePrefixer{prefix: node.Host, dest: s.stderr, mu: &writeMu}
+
+			if err := s.bootstrapWorker(ctx, node, config.Token, config.MasterURL, nodeStdout, nodeStderr); err != nil {
 				s.logger.Error("failed to bootstrap worker",
 					slog.String("host", node.Host),
 					slog.String("error", err.Error()),
@@ -133,7 +150,7 @@ func (s *BootstrapService) bootstrapMaster(ctx context.Context, node contracts.K
 	return nil
 }
 
-func (s *BootstrapService) bootstrapWorker(ctx context.Context, node contracts.K3sNodeConfig, token, masterURL string, outputMutex *sync.Mutex) error {
+func (s *BootstrapService) bootstrapWorker(ctx context.Context, node contracts.K3sNodeConfig, token, masterURL string, stdout, stderr io.Writer) error {
 	// Create SSH executor with persistent connection
 	exec, err := s.createExecutor(node)
 	if err != nil {
@@ -147,12 +164,8 @@ func (s *BootstrapService) bootstrapWorker(ctx context.Context, node contracts.K
 
 	s.logger.Info("executing K3s worker installation", slog.String("host", node.Host))
 
-	// Lock output writers to prevent interleaved output from parallel workers
-	outputMutex.Lock()
-	defer outputMutex.Unlock()
-
 	// Stream output to configured writers (defaults to os.Stdout/os.Stderr)
-	_, err = exec.Execute(ctx, s.stdout, s.stderr, cmd)
+	_, err = exec.Execute(ctx, stdout, stderr, cmd)
 
 	if err != nil {
 		s.logger.Error("worker bootstrap failed", slog.String("host", node.Host))
