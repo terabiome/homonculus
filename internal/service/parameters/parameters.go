@@ -1,4 +1,4 @@
-package service
+package parameters
 
 // NUMAMemory contains NUMA memory tuning configuration.
 type NUMAMemory struct {
@@ -19,8 +19,8 @@ type HostBindMount struct {
 	TargetDir string
 }
 
-// CreateVMParams contains transport-agnostic parameters for creating a virtual machine.
-type CreateVMParams struct {
+// CreateVM contains transport-agnostic parameters for creating a virtual machine.
+type CreateVM struct {
 	Name                   string
 	VCPUCount              int
 	MemoryMB               int64
@@ -38,18 +38,18 @@ type CreateVMParams struct {
 	Tuning                 *VMTuning
 }
 
-// DeleteVMParams contains transport-agnostic parameters for deleting a virtual machine.
-type DeleteVMParams struct {
+// DeleteVM contains transport-agnostic parameters for deleting a virtual machine.
+type DeleteVM struct {
 	Name string
 }
 
-// StartVMParams contains transport-agnostic parameters for starting a virtual machine.
-type StartVMParams struct {
+// StartVM contains transport-agnostic parameters for starting a virtual machine.
+type StartVM struct {
 	Name string
 }
 
-// QueryVMParams contains transport-agnostic parameters for querying a virtual machine.
-type QueryVMParams struct {
+// QueryVM contains transport-agnostic parameters for querying a virtual machine.
+type QueryVM struct {
 	Name string
 }
 
@@ -75,8 +75,8 @@ type VMInfo struct {
 	IPAddress  string
 }
 
-// CloneVMParams contains transport-agnostic parameters for cloning virtual machines.
-type CloneVMParams struct {
+// CloneVM contains transport-agnostic parameters for cloning virtual machines.
+type CloneVM struct {
 	BaseVMName  string
 	TargetSpecs []TargetVMSpec
 }

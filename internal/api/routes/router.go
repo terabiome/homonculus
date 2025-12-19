@@ -22,8 +22,6 @@ func (router *Router) V1Handler(vmHandler *handler.VirtualMachine, k3sHandler *h
 	vmMux.HandleFunc("POST /start/cluster", vmHandler.StartCluster)
 	vmMux.HandleFunc("GET /query/cluster", vmHandler.QueryCluster)
 	vmMux.HandleFunc("POST /query/cluster", vmHandler.QueryCluster)
-	vmMux.HandleFunc("POST /clone/cluster", vmHandler.CloneCluster)
-	vmMux.HandleFunc("POST /format", vmHandler.FormatRequest)
 	mux.Handle("/virtualmachine/", http.StripPrefix("/virtualmachine", vmMux))
 
 	// Setup K3s routes

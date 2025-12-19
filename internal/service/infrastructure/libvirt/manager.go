@@ -6,8 +6,9 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/internal/dependencies"
+	"github.com/terabiome/homonculus/internal/service/parameters"
+
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	"github.com/terabiome/homonculus/pkg/templator"
@@ -30,31 +31,31 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 }
 
 // CreateVirtualMachine creates a virtual machine without starting it.
-func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
+func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, params parameters.CreateVM, virtualMachineUUID uuid.UUID) error {
 	var vcpuPins []VCPUPin
 	var emulatorCPUSet string
 	var numaMemory *NUMAMemory
 	var hostBindMounts = make([]HostBindMount, 0)
 
 	// Process tuning configuration if present
-	if request.Tuning != nil {
+	if params.Tuning != nil {
 		// Validate CPU pinning configuration
-		if len(request.Tuning.VCPUPins) > 0 {
-			if len(request.Tuning.VCPUPins) > request.VCPUCount {
-				return fmt.Errorf("vcpu_pins length (%d) exceeds vcpu_count (%d)", len(request.Tuning.VCPUPins), request.VCPUCount)
+		if len(params.Tuning.VCPUPins) > 0 {
+			if len(params.Tuning.VCPUPins) > params.VCPUCount {
+				return fmt.Errorf("vcpu_pins length (%d) exceeds vcpu_count (%d)", len(params.Tuning.VCPUPins), params.VCPUCount)
 			}
-			if len(request.Tuning.VCPUPins) < request.VCPUCount {
+			if len(params.Tuning.VCPUPins) < params.VCPUCount {
 				m.logger.Warn("partial CPU pinning detected",
-					slog.String("vm", request.Name),
-					slog.Int("vcpu_count", request.VCPUCount),
-					slog.Int("vcpu_pins", len(request.Tuning.VCPUPins)),
+					slog.String("vm", params.Name),
+					slog.Int("vcpu_count", params.VCPUCount),
+					slog.Int("vcpu_pins", len(params.Tuning.VCPUPins)),
 					slog.String("note", "remaining vCPUs will not be pinned"),
 				)
 			}
 
 			// Convert cpuset strings to VCPUPin structs with explicit vcpu indices
-			vcpuPins = make([]VCPUPin, len(request.Tuning.VCPUPins))
-			for i, cpuset := range request.Tuning.VCPUPins {
+			vcpuPins = make([]VCPUPin, len(params.Tuning.VCPUPins))
+			for i, cpuset := range params.Tuning.VCPUPins {
 				vcpuPins[i] = VCPUPin{
 					VCPU:   i,
 					CPUSet: cpuset,
@@ -63,11 +64,11 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependenc
 		}
 
 		// Process emulator CPU set
-		emulatorCPUSet = request.Tuning.EmulatorCPUSet
+		emulatorCPUSet = params.Tuning.EmulatorCPUSet
 
 		// Process NUMA memory configuration
-		if request.Tuning.NUMAMemory != nil {
-			mode := request.Tuning.NUMAMemory.Mode
+		if params.Tuning.NUMAMemory != nil {
+			mode := params.Tuning.NUMAMemory.Mode
 			// Default to preferred if not specified (sweet default)
 			if mode == "" {
 				mode = "preferred"
@@ -78,25 +79,25 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependenc
 			}
 
 			numaMemory = &NUMAMemory{
-				Nodeset: request.Tuning.NUMAMemory.Nodeset,
+				Nodeset: params.Tuning.NUMAMemory.Nodeset,
 				Mode:    mode,
 			}
 		}
 	}
 
-	for _, hostBindMount := range request.HostBindMounts {
+	for _, hostBindMount := range params.HostBindMounts {
 		hostBindMounts = append(hostBindMounts, HostBindMount(hostBindMount))
 	}
 
 	vars := LibvirtTemplateVars{
-		Name:                   request.Name,
+		Name:                   params.Name,
 		UUID:                   virtualMachineUUID,
-		VCPUCount:              request.VCPUCount,
-		MemoryKiB:              request.MemoryMB << 10,
-		DiskPath:               request.DiskPath,
-		CloudInitISOPath:       request.CloudInitISOPath,
+		VCPUCount:              params.VCPUCount,
+		MemoryKiB:              params.MemoryMB << 10,
+		DiskPath:               params.DiskPath,
+		CloudInitISOPath:       params.CloudInitISOPath,
 		HostBindMounts:         hostBindMounts,
-		BridgeNetworkInterface: request.BridgeNetworkInterface,
+		BridgeNetworkInterface: params.BridgeNetworkInterface,
 		VCPUPins:               vcpuPins,
 		EmulatorCPUSet:         emulatorCPUSet,
 		NUMAMemory:             numaMemory,
@@ -106,68 +107,68 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependenc
 	if err != nil {
 		return fmt.Errorf("could not create Libvirt XML in memory: %w", err)
 	}
-	m.logger.Debug("rendered libvirt XML", slog.String("vm", request.Name))
+	m.logger.Debug("rendered libvirt XML", slog.String("vm", params.Name))
 
 	_, err = hypervisor.Conn.DomainDefineXML(string(bytes))
 	if err != nil {
 		return fmt.Errorf("could not define VM from Libvirt XML: %w", err)
 	}
-	m.logger.Info("defined VM in libvirt", slog.String("vm", request.Name))
+	m.logger.Info("defined VM in libvirt", slog.String("vm", params.Name))
 
 	return nil
 }
 
 // StartVirtualMachine starts a virtual machine by name.
-func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.StartVMRequest) error {
-	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
+func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, params parameters.StartVM) error {
+	domain, err := hypervisor.Conn.LookupDomainByName(params.Name)
 	if err != nil {
 		return fmt.Errorf("could not look up VM by name: %w", err)
 	}
-	m.logger.Debug("found VM", slog.String("vm", request.Name))
+	m.logger.Debug("found VM", slog.String("vm", params.Name))
 
 	if err = domain.Create(); err != nil {
 		return fmt.Errorf("could not start VM: %w", err)
 	}
-	m.logger.Info("started VM", slog.String("vm", request.Name))
+	m.logger.Info("started VM", slog.String("vm", params.Name))
 
 	return nil
 }
 
 // GetVirtualMachineInfo retrieves detailed information about a virtual machine.
-func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.QueryVMRequest) (contracts.VMInfo, error) {
-	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
+func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependencies.HypervisorContext, params parameters.QueryVM) (parameters.VMInfo, error) {
+	domain, err := hypervisor.Conn.LookupDomainByName(params.Name)
 	if err != nil {
-		return contracts.VMInfo{}, fmt.Errorf("could not look up VM by name: %w", err)
+		return parameters.VMInfo{}, fmt.Errorf("could not look up VM by name: %w", err)
 	}
 
 	// Get UUID
 	uuidStr, err := domain.GetUUIDString()
 	if err != nil {
-		return contracts.VMInfo{}, fmt.Errorf("could not get VM UUID: %w", err)
+		return parameters.VMInfo{}, fmt.Errorf("could not get VM UUID: %w", err)
 	}
 
 	// Get state
 	state, _, err := domain.GetState()
 	if err != nil {
-		return contracts.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
+		return parameters.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
 	}
 
 	// Get XML description
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return contracts.VMInfo{}, fmt.Errorf("could not read domain XML: %w", err)
+		return parameters.VMInfo{}, fmt.Errorf("could not read domain XML: %w", err)
 	}
 
 	domainXML := libvirtxml.Domain{}
 	if err = domainXML.Unmarshal(domainXMLString); err != nil {
-		return contracts.VMInfo{}, fmt.Errorf("could not parse domain XML: %w", err)
+		return parameters.VMInfo{}, fmt.Errorf("could not parse domain XML: %w", err)
 	}
 
 	// Extract disk information
-	var disks []contracts.DiskInfo
+	var disks []parameters.DiskInfo
 	for _, disk := range domainXML.Devices.Disks {
 		if disk.Source != nil && disk.Source.File != nil {
-			diskInfo := contracts.DiskInfo{
+			diskInfo := parameters.DiskInfo{
 				Path:   disk.Source.File.File,
 				Device: disk.Device,
 			}
@@ -183,19 +184,19 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependen
 	// Get autostart status
 	autoStart, err := domain.GetAutostart()
 	if err != nil {
-		m.logger.Warn("could not get autostart status", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		m.logger.Warn("could not get autostart status", slog.String("vm", params.Name), slog.String("error", err.Error()))
 		autoStart = false
 	}
 
 	// Check if persistent
 	persistent, err := domain.IsPersistent()
 	if err != nil {
-		m.logger.Warn("could not get persistent status", slog.String("vm", request.Name), slog.String("error", err.Error()))
+		m.logger.Warn("could not get persistent status", slog.String("vm", params.Name), slog.String("error", err.Error()))
 		persistent = false
 	}
 
-	vmInfo := contracts.VMInfo{
-		Name:       request.Name,
+	vmInfo := parameters.VMInfo{
+		Name:       params.Name,
 		UUID:       uuidStr,
 		State:      domainStateToString(state), // Convert to string for JSON API
 		VCPUCount:  domainXML.VCPU.Value,
@@ -214,24 +215,24 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependen
 				m.logger.Warn("retrieved empty hostname")
 			} else {
 				vmInfo.Hostname = hostname
-				m.logger.Debug("retrieved hostname from DHCP lease", slog.String("vm", request.Name), slog.String("hostname", hostname))
+				m.logger.Debug("retrieved hostname from DHCP lease", slog.String("vm", params.Name), slog.String("hostname", hostname))
 			}
 		} else {
-			m.logger.Warn("could not get hostname", slog.String("vm", request.Name), slog.String("error", err.Error()))
+			m.logger.Warn("could not get hostname", slog.String("vm", params.Name), slog.String("error", err.Error()))
 		}
 
 		// Get IP addresses from domain interfaces
 		ifaces, err := domain.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
 		if err == nil {
 			if len(ifaces) < 1 {
-				m.logger.Warn("retrieved no interface", slog.String("vm", request.Name))
+				m.logger.Warn("retrieved no interface", slog.String("vm", params.Name))
 			} else {
 				// Get the first non-loopback IPv4 address
 				for _, iface := range ifaces {
 					for _, addr := range iface.Addrs {
 						if addr.Type == libvirt.IP_ADDR_TYPE_IPV4 && addr.Addr != "127.0.0.1" {
 							vmInfo.IPAddress = addr.Addr
-							m.logger.Debug("retrieved IP address from DHCP lease", slog.String("vm", request.Name), slog.String("ip", addr.Addr))
+							m.logger.Debug("retrieved IP address from DHCP lease", slog.String("vm", params.Name), slog.String("ip", addr.Addr))
 							break
 						}
 					}
@@ -241,24 +242,24 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependen
 				}
 			}
 		} else {
-			m.logger.Warn("could not get network interface(s)", slog.String("vm", request.Name), slog.String("error", err.Error()))
+			m.logger.Warn("could not get network interface(s)", slog.String("vm", params.Name), slog.String("error", err.Error()))
 		}
 	}
 
-	m.logger.Debug("retrieved VM info", slog.String("vm", request.Name), slog.String("state", vmInfo.State))
+	m.logger.Debug("retrieved VM info", slog.String("vm", params.Name), slog.String("state", vmInfo.State))
 
 	return vmInfo, nil
 }
 
 // ListAllVirtualMachines retrieves information about all virtual machines.
-func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor dependencies.HypervisorContext) ([]contracts.VMInfo, error) {
+func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor dependencies.HypervisorContext) ([]parameters.VMInfo, error) {
 	// List all domains (both active and inactive)
 	domains, err := hypervisor.Conn.ListAllDomains(libvirt.CONNECT_LIST_DOMAINS_ACTIVE | libvirt.CONNECT_LIST_DOMAINS_INACTIVE)
 	if err != nil {
 		return nil, fmt.Errorf("could not list domains: %w", err)
 	}
 
-	var vmInfos []contracts.VMInfo
+	var vmInfos []parameters.VMInfo
 	for _, domain := range domains {
 		name, err := domain.GetName()
 		if err != nil {
@@ -266,7 +267,7 @@ func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor depende
 			continue
 		}
 
-		vmInfo, err := m.GetVirtualMachineInfo(ctx, hypervisor, contracts.QueryVMRequest{Name: name})
+		vmInfo, err := m.GetVirtualMachineInfo(ctx, hypervisor, parameters.QueryVM{Name: name})
 		if err != nil {
 			m.logger.Warn("could not get VM info", slog.String("vm", name), slog.String("error", err.Error()))
 			continue
@@ -305,12 +306,12 @@ func domainStateToString(state libvirt.DomainState) string {
 }
 
 // DeleteVirtualMachine stops and removes a virtual machine.
-func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.DeleteVMRequest) (string, error) {
-	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
+func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, params parameters.DeleteVM) (string, error) {
+	domain, err := hypervisor.Conn.LookupDomainByName(params.Name)
 	if err != nil {
 		return "", fmt.Errorf("could not look up VM by name: %w", err)
 	}
-	m.logger.Debug("found VM", slog.String("vm", request.Name))
+	m.logger.Debug("found VM", slog.String("vm", params.Name))
 
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
@@ -330,14 +331,14 @@ func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor dependenc
 
 	for _, disk := range domainXML.Devices.Disks {
 		m.logger.Debug("deleting disk",
-			slog.String("vm", request.Name),
+			slog.String("vm", params.Name),
 			slog.String("type", disk.Driver.Type),
 			slog.String("path", disk.Source.File.File),
 		)
 
 		if err := fileops.RemoveFile(ctx, hypervisor.Executor, disk.Source.File.File); err != nil {
 			m.logger.Warn("failed to delete disk",
-				slog.String("vm", request.Name),
+				slog.String("vm", params.Name),
 				slog.String("path", disk.Source.File.File),
 				slog.String("error", err.Error()),
 			)
@@ -348,13 +349,13 @@ func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor dependenc
 		if err = domain.Destroy(); err != nil {
 			return "", fmt.Errorf("could not destroy VM: %w", err)
 		}
-		m.logger.Debug("destroyed running VM", slog.String("vm", request.Name))
+		m.logger.Debug("destroyed running VM", slog.String("vm", params.Name))
 	}
 
 	if err = domain.Undefine(); err != nil {
 		return "", fmt.Errorf("could not undefine VM: %w", err)
 	}
-	m.logger.Info("undefined VM from libvirt", slog.String("vm", request.Name))
+	m.logger.Info("undefined VM from libvirt", slog.String("vm", params.Name))
 
 	return vmUUID, nil
 }
@@ -401,7 +402,7 @@ func (m *Manager) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error
 }
 
 // CloneVirtualMachine clones a VM from a base domain XML without starting it.
-func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo contracts.TargetVMSpec, virtualMachineUUID uuid.UUID) error {
+func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo parameters.TargetVMSpec, virtualMachineUUID uuid.UUID) error {
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
 	newDomainXML.UUID = virtualMachineUUID.String()

@@ -10,13 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/terabiome/homonculus/internal/adapter"
 	"github.com/terabiome/homonculus/internal/api/handler"
 	"github.com/terabiome/homonculus/internal/api/routes"
 	"github.com/terabiome/homonculus/internal/config"
-	"github.com/terabiome/homonculus/internal/infrastructure/cloudinit"
-	"github.com/terabiome/homonculus/internal/infrastructure/disk"
-	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
 	"github.com/terabiome/homonculus/internal/service"
+	"github.com/terabiome/homonculus/internal/service/infrastructure/cloudinit"
+	"github.com/terabiome/homonculus/internal/service/infrastructure/disk"
+	"github.com/terabiome/homonculus/internal/service/infrastructure/libvirt"
 	"github.com/terabiome/homonculus/pkg/constants"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
 	"github.com/terabiome/homonculus/pkg/logger"
@@ -153,8 +154,10 @@ func runServer(ctx context.Context, cfg *config.Config, log *slog.Logger, addres
 		return fmt.Errorf("failed to initialize VM service: %w", err)
 	}
 
+	spAdapter := adapter.NewServiceParameterAdapter()
+
 	// Initialize handlers
-	vmHandler := handler.NewVirtualMachine(vmService, log)
+	vmHandler := handler.NewVirtualMachine(vmService, log, spAdapter)
 	k3sHandler := handler.NewK3s(log)
 	systemHandler := handler.NewSystem(log)
 

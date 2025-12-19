@@ -1,14 +1,10 @@
 package cloudinit
 
-import (
-	"github.com/terabiome/homonculus/internal/api/contracts"
-	"github.com/terabiome/homonculus/pkg/constants"
-)
+import "github.com/terabiome/homonculus/internal/service/parameters"
 
 type UserDataTemplateVars struct {
 	Hostname         string
-	UserConfigs      []contracts.UserConfig
-	Role             constants.KubernetesRole
+	UserConfigs      []parameters.UserConfig
 	DoPackageUpdate  bool
 	DoPackageUpgrade bool
 	Runcmds          []string
