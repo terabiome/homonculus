@@ -1,11 +1,11 @@
 package adapter
 
 import (
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/internal/service"
 )
 
-func AdaptCreateCluster(req api.CreateClusterRequest) []service.CreateVMParams {
+func AdaptCreateCluster(req contracts.CreateClusterRequest) []service.CreateVMParams {
 	params := make([]service.CreateVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = AdaptCreateVM(vm)
@@ -13,7 +13,7 @@ func AdaptCreateCluster(req api.CreateClusterRequest) []service.CreateVMParams {
 	return params
 }
 
-func AdaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
+func AdaptCreateVM(vm contracts.CreateVMRequest) service.CreateVMParams {
 	var tuning *service.VMTuning
 
 	// Convert tuning configuration if present
@@ -51,7 +51,7 @@ func AdaptCreateVM(vm api.CreateVMRequest) service.CreateVMParams {
 	}
 }
 
-func AdaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
+func AdaptDeleteCluster(req contracts.DeleteClusterRequest) []service.DeleteVMParams {
 	params := make([]service.DeleteVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.DeleteVMParams{
@@ -61,7 +61,7 @@ func AdaptDeleteCluster(req api.DeleteClusterRequest) []service.DeleteVMParams {
 	return params
 }
 
-func AdaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
+func AdaptStartCluster(req contracts.StartClusterRequest) []service.StartVMParams {
 	params := make([]service.StartVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.StartVMParams{
@@ -71,7 +71,7 @@ func AdaptStartCluster(req api.StartClusterRequest) []service.StartVMParams {
 	return params
 }
 
-func AdaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
+func AdaptQueryCluster(req contracts.QueryClusterRequest) []service.QueryVMParams {
 	params := make([]service.QueryVMParams, len(req.VirtualMachines))
 	for i, vm := range req.VirtualMachines {
 		params[i] = service.QueryVMParams{
@@ -81,19 +81,19 @@ func AdaptQueryCluster(req api.QueryClusterRequest) []service.QueryVMParams {
 	return params
 }
 
-func AdaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
-	result := make([]api.VMInfo, len(vmInfos))
+func AdaptVMInfoToAPI(vmInfos []service.VMInfo) []contracts.VMInfo {
+	result := make([]contracts.VMInfo, len(vmInfos))
 	for i, info := range vmInfos {
-		disks := make([]api.DiskInfo, len(info.Disks))
+		disks := make([]contracts.DiskInfo, len(info.Disks))
 		for j, d := range info.Disks {
-			disks[j] = api.DiskInfo{
+			disks[j] = contracts.DiskInfo{
 				Path:   d.Path,
 				Type:   d.Type,
 				Device: d.Device,
 				SizeGB: d.SizeGB,
 			}
 		}
-		result[i] = api.VMInfo{
+		result[i] = contracts.VMInfo{
 			Name:       info.Name,
 			UUID:       info.UUID,
 			State:      info.State,
@@ -109,7 +109,7 @@ func AdaptVMInfoToAPI(vmInfos []service.VMInfo) []api.VMInfo {
 	return result
 }
 
-func AdaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
+func AdaptCloneCluster(req contracts.CloneClusterRequest) service.CloneVMParams {
 	targetSpecs := make([]service.TargetVMSpec, len(req.TargetVMs))
 	for i, target := range req.TargetVMs {
 		targetSpecs[i] = service.TargetVMSpec{
@@ -128,7 +128,7 @@ func AdaptCloneCluster(req api.CloneClusterRequest) service.CloneVMParams {
 	}
 }
 
-func AdaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
+func AdaptUserConfigs(configs []contracts.UserConfig) []service.UserConfig {
 	result := make([]service.UserConfig, len(configs))
 	for i, c := range configs {
 		result[i] = service.UserConfig{
@@ -140,7 +140,7 @@ func AdaptUserConfigs(configs []api.UserConfig) []service.UserConfig {
 	return result
 }
 
-func AdaptHostBindMounts(configs []api.HostBindMount) []service.HostBindMount {
+func AdaptHostBindMounts(configs []contracts.HostBindMount) []service.HostBindMount {
 	result := make([]service.HostBindMount, len(configs))
 	for i, c := range configs {
 		result[i] = service.HostBindMount{

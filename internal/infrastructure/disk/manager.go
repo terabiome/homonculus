@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/terabiome/homonculus/internal/api"
-	"github.com/terabiome/homonculus/internal/runtime"
+	"github.com/terabiome/homonculus/internal/api/contracts"
+	"github.com/terabiome/homonculus/internal/dependencies"
 	"github.com/terabiome/homonculus/pkg/executor/qemuimg"
 )
 
@@ -25,7 +25,7 @@ func NewManager(logger *slog.Logger) *Manager {
 }
 
 // CreateDisk creates a QCOW2 disk with a backing file.
-func (m *Manager) CreateDisk(ctx context.Context, hypervisor runtime.HypervisorContext, req api.CreateVMRequest) error {
+func (m *Manager) CreateDisk(ctx context.Context, hypervisor dependencies.HypervisorContext, req contracts.CreateVMRequest) error {
 	m.logger.Debug("creating qcow2 disk",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),
@@ -63,7 +63,7 @@ func (m *Manager) CreateDisk(ctx context.Context, hypervisor runtime.HypervisorC
 }
 
 // CreateDiskForClone creates a QCOW2 disk for cloning operations.
-func (m *Manager) CreateDiskForClone(ctx context.Context, hypervisor runtime.HypervisorContext, req api.TargetVMSpec) error {
+func (m *Manager) CreateDiskForClone(ctx context.Context, hypervisor dependencies.HypervisorContext, req contracts.TargetVMSpec) error {
 	m.logger.Debug("creating qcow2 disk for clone",
 		slog.String("path", req.DiskPath),
 		slog.String("base", req.BaseImagePath),

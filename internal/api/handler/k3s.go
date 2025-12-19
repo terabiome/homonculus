@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/pkg/k3s"
 )
 
@@ -42,7 +42,7 @@ func (h *K3s) GenerateToken(writer http.ResponseWriter, request *http.Request) {
 
 // BootstrapMaster handles POST /bootstrap/master requests to bootstrap K3s master nodes
 func (h *K3s) BootstrapMaster(writer http.ResponseWriter, request *http.Request) {
-	var config api.K3sMasterBootstrapConfig
+	var config contracts.K3sMasterBootstrapConfig
 	cb, err := parseBodyAndHandleError(writer, request, &config, true)
 	if err != nil {
 		cb()
@@ -85,7 +85,7 @@ func (h *K3s) BootstrapMaster(writer http.ResponseWriter, request *http.Request)
 
 // BootstrapWorker handles POST /bootstrap/worker requests to bootstrap K3s worker nodes
 func (h *K3s) BootstrapWorker(writer http.ResponseWriter, request *http.Request) {
-	var config api.K3sWorkerBootstrapConfig
+	var config contracts.K3sWorkerBootstrapConfig
 	cb, err := parseBodyAndHandleError(writer, request, &config, true)
 	if err != nil {
 		cb()
@@ -133,4 +133,3 @@ func (h *K3s) BootstrapWorker(writer http.ResponseWriter, request *http.Request)
 		Message: "bootstrapped K3s worker nodes successfully",
 	})
 }
-

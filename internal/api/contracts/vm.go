@@ -1,4 +1,4 @@
-package api
+package contracts
 
 import "github.com/terabiome/homonculus/pkg/constants"
 
@@ -83,7 +83,7 @@ type BaseVMSpec struct {
 }
 
 // TargetVMSpec contains the configuration for a cloned virtual machine.
-// BaseImagePath is populated internally from the base VM's disk and is not part of the API.
+// BaseImagePath is populated internally from the base VM's disk and is not part of the contracts.
 type TargetVMSpec struct {
 	Name          string `json:"name"`
 	VCPUCount     int    `json:"vcpu_count"`

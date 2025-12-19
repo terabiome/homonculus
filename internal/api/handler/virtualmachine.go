@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/terabiome/homonculus/internal/adapter"
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/internal/service"
 )
 
@@ -26,7 +26,7 @@ func NewVirtualMachine(vmService *service.VMService, logger *slog.Logger) *Virtu
 
 // CreateCluster handles POST /create/cluster requests to create multiple VMs
 func (h *VirtualMachine) CreateCluster(writer http.ResponseWriter, request *http.Request) {
-	var createRequest api.CreateClusterRequest
+	var createRequest contracts.CreateClusterRequest
 	cb, err := parseBodyAndHandleError(writer, request, &createRequest, true)
 	if err != nil {
 		cb()
@@ -62,7 +62,7 @@ func (h *VirtualMachine) CreateCluster(writer http.ResponseWriter, request *http
 
 // DeleteCluster handles POST /delete/cluster requests to delete multiple VMs
 func (h *VirtualMachine) DeleteCluster(writer http.ResponseWriter, request *http.Request) {
-	var deleteRequest api.DeleteClusterRequest
+	var deleteRequest contracts.DeleteClusterRequest
 	cb, err := parseBodyAndHandleError(writer, request, &deleteRequest, true)
 	if err != nil {
 		cb()
@@ -98,7 +98,7 @@ func (h *VirtualMachine) DeleteCluster(writer http.ResponseWriter, request *http
 
 // StartCluster handles POST /start/cluster requests to start multiple VMs
 func (h *VirtualMachine) StartCluster(writer http.ResponseWriter, request *http.Request) {
-	var startRequest api.StartClusterRequest
+	var startRequest contracts.StartClusterRequest
 	cb, err := parseBodyAndHandleError(writer, request, &startRequest, true)
 	if err != nil {
 		cb()
@@ -138,7 +138,7 @@ func (h *VirtualMachine) QueryCluster(writer http.ResponseWriter, request *http.
 
 	// Check if specific VMs are requested via query parameter or body
 	var vmParams []service.QueryVMParams
-	var queryRequest api.QueryClusterRequest
+	var queryRequest contracts.QueryClusterRequest
 
 	// Try to parse body if present (for POST requests)
 	if request.Method == http.MethodPost {
@@ -164,7 +164,7 @@ func (h *VirtualMachine) QueryCluster(writer http.ResponseWriter, request *http.
 	}
 
 	// Convert service VMInfo to API VMInfo
-	response := api.QueryClusterResponse{
+	response := contracts.QueryClusterResponse{
 		VirtualMachines: adapter.AdaptVMInfoToAPI(vmInfos),
 	}
 
@@ -176,7 +176,7 @@ func (h *VirtualMachine) QueryCluster(writer http.ResponseWriter, request *http.
 
 // CloneCluster handles POST /clone/cluster requests to clone VMs
 func (h *VirtualMachine) CloneCluster(writer http.ResponseWriter, request *http.Request) {
-	var cloneRequest api.CloneClusterRequest
+	var cloneRequest contracts.CloneClusterRequest
 	cb, err := parseBodyAndHandleError(writer, request, &cloneRequest, true)
 	if err != nil {
 		cb()
@@ -213,12 +213,12 @@ func (h *VirtualMachine) CloneCluster(writer http.ResponseWriter, request *http.
 // FormatRequest handles POST /format requests to format contract examples
 func (h *VirtualMachine) FormatRequest(writer http.ResponseWriter, request *http.Request) {
 	contractGeneratorMap := map[string]func() any{
-		"create":       func() any { return api.CreateClusterRequest{} },
-		"delete":       func() any { return api.DeleteClusterRequest{} },
-		"start":        func() any { return api.StartClusterRequest{} },
-		"query":        func() any { return api.QueryClusterRequest{} },
-		"clone":        func() any { return api.CloneClusterRequest{} },
-		"create_fleet": func() any { return api.CreateClusterRequest{} },
+		"create":       func() any { return contracts.CreateClusterRequest{} },
+		"delete":       func() any { return contracts.DeleteClusterRequest{} },
+		"start":        func() any { return contracts.StartClusterRequest{} },
+		"query":        func() any { return contracts.QueryClusterRequest{} },
+		"clone":        func() any { return contracts.CloneClusterRequest{} },
+		"create_fleet": func() any { return contracts.CreateClusterRequest{} },
 	}
 
 	serializerMap := map[string]func(any) ([]byte, error){

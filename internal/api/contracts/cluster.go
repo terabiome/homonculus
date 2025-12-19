@@ -1,4 +1,4 @@
-package api
+package contracts
 
 // CreateClusterRequest contains the configuration for creating a cluster of virtual machines.
 type CreateClusterRequest struct {

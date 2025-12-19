@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
+	"github.com/terabiome/homonculus/internal/dependencies"
 	"github.com/terabiome/homonculus/internal/infrastructure/cloudinit"
 	"github.com/terabiome/homonculus/internal/infrastructure/disk"
 	"github.com/terabiome/homonculus/internal/infrastructure/libvirt"
-	"github.com/terabiome/homonculus/internal/runtime"
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	pkglibvirt "github.com/terabiome/homonculus/pkg/libvirt"
@@ -118,7 +118,7 @@ func (s *VMService) CreateCluster(ctx context.Context, vms []CreateVMParams) err
 	}
 	defer unlock()
 
-	hypervisor := runtime.HypervisorContext{
+	hypervisor := dependencies.HypervisorContext{
 		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
@@ -245,7 +245,7 @@ func (s *VMService) DeleteCluster(ctx context.Context, vms []DeleteVMParams) err
 	}
 	defer unlock()
 
-	hypervisor := runtime.HypervisorContext{
+	hypervisor := dependencies.HypervisorContext{
 		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
@@ -302,7 +302,7 @@ func (s *VMService) StartCluster(ctx context.Context, vms []StartVMParams) error
 	}
 	defer unlock()
 
-	hypervisor := runtime.HypervisorContext{
+	hypervisor := dependencies.HypervisorContext{
 		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
@@ -343,7 +343,7 @@ func (s *VMService) QueryCluster(ctx context.Context, vms []QueryVMParams) ([]VM
 	}
 	defer unlock()
 
-	hypervisor := runtime.HypervisorContext{
+	hypervisor := dependencies.HypervisorContext{
 		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
@@ -408,7 +408,7 @@ func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) erro
 	}
 	defer unlock()
 
-	hypervisor := runtime.HypervisorContext{
+	hypervisor := dependencies.HypervisorContext{
 		URI:      s.connManager.GetURI(),
 		Conn:     conn,
 		Executor: exec,
@@ -530,36 +530,36 @@ func (s *VMService) CloneCluster(ctx context.Context, params CloneVMParams) erro
 
 // Helper methods to convert service params to infrastructure contracts
 
-func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest {
-	// Convert service.UserConfig to api.UserConfig
-	userConfigs := make([]api.UserConfig, len(params.UserConfigs))
+func (s *VMService) toCreateVMRequest(params CreateVMParams) contracts.CreateVMRequest {
+	// Convert service.UserConfig to contracts.UserConfig
+	userConfigs := make([]contracts.UserConfig, len(params.UserConfigs))
 	for i, uc := range params.UserConfigs {
-		userConfigs[i] = api.UserConfig{
+		userConfigs[i] = contracts.UserConfig{
 			Username:          uc.Username,
 			SSHAuthorizedKeys: uc.SSHAuthorizedKeys,
 			Password:          uc.Password,
 		}
 	}
 
-	var tuning *api.VMTuning
+	var tuning *contracts.VMTuning
 
 	// Convert tuning configuration if present
 	if params.Tuning != nil {
-		tuning = &api.VMTuning{
+		tuning = &contracts.VMTuning{
 			VCPUPins:       params.Tuning.VCPUPins,
 			EmulatorCPUSet: params.Tuning.EmulatorCPUSet,
 		}
 
 		// Convert NUMA memory if present
 		if params.Tuning.NUMAMemory != nil {
-			tuning.NUMAMemory = &api.NUMAMemory{
+			tuning.NUMAMemory = &contracts.NUMAMemory{
 				Nodeset: params.Tuning.NUMAMemory.Nodeset,
 				Mode:    params.Tuning.NUMAMemory.Mode,
 			}
 		}
 	}
 
-	return api.CreateVMRequest{
+	return contracts.CreateVMRequest{
 		Name:                   params.Name,
 		VCPUCount:              params.VCPUCount,
 		MemoryMB:               params.MemoryMB,
@@ -577,25 +577,25 @@ func (s *VMService) toCreateVMRequest(params CreateVMParams) api.CreateVMRequest
 	}
 }
 
-func (s *VMService) toDeleteVMRequest(params DeleteVMParams) api.DeleteVMRequest {
-	return api.DeleteVMRequest{
+func (s *VMService) toDeleteVMRequest(params DeleteVMParams) contracts.DeleteVMRequest {
+	return contracts.DeleteVMRequest{
 		Name: params.Name,
 	}
 }
 
-func (s *VMService) toStartVMRequest(params StartVMParams) api.StartVMRequest {
-	return api.StartVMRequest{
+func (s *VMService) toStartVMRequest(params StartVMParams) contracts.StartVMRequest {
+	return contracts.StartVMRequest{
 		Name: params.Name,
 	}
 }
 
-func (s *VMService) toQueryVMRequest(params QueryVMParams) api.QueryVMRequest {
-	return api.QueryVMRequest{
+func (s *VMService) toQueryVMRequest(params QueryVMParams) contracts.QueryVMRequest {
+	return contracts.QueryVMRequest{
 		Name: params.Name,
 	}
 }
 
-func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
+func (s *VMService) fromAPIVMInfo(apiInfo contracts.VMInfo) VMInfo {
 	disks := make([]DiskInfo, len(apiInfo.Disks))
 	for i, d := range apiInfo.Disks {
 		disks[i] = DiskInfo{
@@ -620,8 +620,8 @@ func (s *VMService) fromAPIVMInfo(apiInfo api.VMInfo) VMInfo {
 	}
 }
 
-func (s *VMService) toTargetVMSpec(spec TargetVMSpec) api.TargetVMSpec {
-	return api.TargetVMSpec{
+func (s *VMService) toTargetVMSpec(spec TargetVMSpec) contracts.TargetVMSpec {
+	return contracts.TargetVMSpec{
 		Name:          spec.Name,
 		VCPUCount:     spec.VCPUCount,
 		MemoryMB:      spec.MemoryMB,

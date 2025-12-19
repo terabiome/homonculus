@@ -8,7 +8,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/pkg/executor"
 	"golang.org/x/sync/errgroup"
 )
@@ -38,7 +38,7 @@ func (s *BootstrapService) WithOutput(stdout, stderr io.Writer) *BootstrapServic
 }
 
 // BootstrapMasters installs K3s server on one or more master nodes.
-func (s *BootstrapService) BootstrapMasters(ctx context.Context, config api.K3sMasterBootstrapConfig) error {
+func (s *BootstrapService) BootstrapMasters(ctx context.Context, config contracts.K3sMasterBootstrapConfig) error {
 	s.logger.Info("starting K3s master bootstrap", slog.Int("nodes", len(config.Nodes)))
 
 	for i, node := range config.Nodes {
@@ -62,7 +62,7 @@ func (s *BootstrapService) BootstrapMasters(ctx context.Context, config api.K3sM
 }
 
 // BootstrapWorkers installs K3s agent on one or more worker nodes in parallel.
-func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config api.K3sWorkerBootstrapConfig) error {
+func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config contracts.K3sWorkerBootstrapConfig) error {
 	s.logger.Info("starting K3s worker bootstrap (parallel)",
 		slog.Int("nodes", len(config.Nodes)),
 		slog.String("master_url", config.MasterURL),
@@ -108,7 +108,7 @@ func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config api.K3sW
 	return nil
 }
 
-func (s *BootstrapService) bootstrapMaster(ctx context.Context, node api.K3sNodeConfig, token string) error {
+func (s *BootstrapService) bootstrapMaster(ctx context.Context, node contracts.K3sNodeConfig, token string) error {
 	// Create SSH executor with persistent connection
 	exec, err := s.createExecutor(node)
 	if err != nil {
@@ -133,7 +133,7 @@ func (s *BootstrapService) bootstrapMaster(ctx context.Context, node api.K3sNode
 	return nil
 }
 
-func (s *BootstrapService) bootstrapWorker(ctx context.Context, node api.K3sNodeConfig, token, masterURL string, outputMutex *sync.Mutex) error {
+func (s *BootstrapService) bootstrapWorker(ctx context.Context, node contracts.K3sNodeConfig, token, masterURL string, outputMutex *sync.Mutex) error {
 	// Create SSH executor with persistent connection
 	exec, err := s.createExecutor(node)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s *BootstrapService) bootstrapWorker(ctx context.Context, node api.K3sNode
 	return nil
 }
 
-func (s *BootstrapService) createExecutor(node api.K3sNodeConfig) (*executor.SSH, error) {
+func (s *BootstrapService) createExecutor(node contracts.K3sNodeConfig) (*executor.SSH, error) {
 	return executor.NewSSH(executor.SSHConfig{
 		Host:    node.Host,
 		Port:    node.SSHPort,

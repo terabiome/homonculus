@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"github.com/terabiome/homonculus/internal/handler"
+	"github.com/terabiome/homonculus/internal/api/handler"
 )
 
 // Router wraps http.ServeMux and provides route setup

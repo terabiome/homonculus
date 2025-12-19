@@ -1,4 +1,4 @@
-package api
+package contracts
 
 // UserConfig represents a user account configuration for cloud-init.
 type UserConfig struct {

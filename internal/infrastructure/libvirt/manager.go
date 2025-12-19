@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"github.com/terabiome/homonculus/internal/api"
-	"github.com/terabiome/homonculus/internal/runtime"
+	"github.com/terabiome/homonculus/internal/api/contracts"
+	"github.com/terabiome/homonculus/internal/dependencies"
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/executor/fileops"
 	"github.com/terabiome/homonculus/pkg/templator"
@@ -30,7 +30,7 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 }
 
 // CreateVirtualMachine creates a virtual machine without starting it.
-func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
+func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.CreateVMRequest, virtualMachineUUID uuid.UUID) error {
 	var vcpuPins []VCPUPin
 	var emulatorCPUSet string
 	var numaMemory *NUMAMemory
@@ -118,7 +118,7 @@ func (m *Manager) CreateVirtualMachine(ctx context.Context, hypervisor runtime.H
 }
 
 // StartVirtualMachine starts a virtual machine by name.
-func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.StartVMRequest) error {
+func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.StartVMRequest) error {
 	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
 	if err != nil {
 		return fmt.Errorf("could not look up VM by name: %w", err)
@@ -134,40 +134,40 @@ func (m *Manager) StartVirtualMachine(ctx context.Context, hypervisor runtime.Hy
 }
 
 // GetVirtualMachineInfo retrieves detailed information about a virtual machine.
-func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.HypervisorContext, request api.QueryVMRequest) (api.VMInfo, error) {
+func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.QueryVMRequest) (contracts.VMInfo, error) {
 	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
 	if err != nil {
-		return api.VMInfo{}, fmt.Errorf("could not look up VM by name: %w", err)
+		return contracts.VMInfo{}, fmt.Errorf("could not look up VM by name: %w", err)
 	}
 
 	// Get UUID
 	uuidStr, err := domain.GetUUIDString()
 	if err != nil {
-		return api.VMInfo{}, fmt.Errorf("could not get VM UUID: %w", err)
+		return contracts.VMInfo{}, fmt.Errorf("could not get VM UUID: %w", err)
 	}
 
 	// Get state
 	state, _, err := domain.GetState()
 	if err != nil {
-		return api.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
+		return contracts.VMInfo{}, fmt.Errorf("could not get VM state: %w", err)
 	}
 
 	// Get XML description
 	domainXMLString, err := domain.GetXMLDesc(libvirt.DOMAIN_XML_INACTIVE)
 	if err != nil {
-		return api.VMInfo{}, fmt.Errorf("could not read domain XML: %w", err)
+		return contracts.VMInfo{}, fmt.Errorf("could not read domain XML: %w", err)
 	}
 
 	domainXML := libvirtxml.Domain{}
 	if err = domainXML.Unmarshal(domainXMLString); err != nil {
-		return api.VMInfo{}, fmt.Errorf("could not parse domain XML: %w", err)
+		return contracts.VMInfo{}, fmt.Errorf("could not parse domain XML: %w", err)
 	}
 
 	// Extract disk information
-	var disks []api.DiskInfo
+	var disks []contracts.DiskInfo
 	for _, disk := range domainXML.Devices.Disks {
 		if disk.Source != nil && disk.Source.File != nil {
-			diskInfo := api.DiskInfo{
+			diskInfo := contracts.DiskInfo{
 				Path:   disk.Source.File.File,
 				Device: disk.Device,
 			}
@@ -194,7 +194,7 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 		persistent = false
 	}
 
-	vmInfo := api.VMInfo{
+	vmInfo := contracts.VMInfo{
 		Name:       request.Name,
 		UUID:       uuidStr,
 		State:      domainStateToString(state), // Convert to string for JSON API
@@ -251,14 +251,14 @@ func (m *Manager) GetVirtualMachineInfo(ctx context.Context, hypervisor runtime.
 }
 
 // ListAllVirtualMachines retrieves information about all virtual machines.
-func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor runtime.HypervisorContext) ([]api.VMInfo, error) {
+func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor dependencies.HypervisorContext) ([]contracts.VMInfo, error) {
 	// List all domains (both active and inactive)
 	domains, err := hypervisor.Conn.ListAllDomains(libvirt.CONNECT_LIST_DOMAINS_ACTIVE | libvirt.CONNECT_LIST_DOMAINS_INACTIVE)
 	if err != nil {
 		return nil, fmt.Errorf("could not list domains: %w", err)
 	}
 
-	var vmInfos []api.VMInfo
+	var vmInfos []contracts.VMInfo
 	for _, domain := range domains {
 		name, err := domain.GetName()
 		if err != nil {
@@ -266,7 +266,7 @@ func (m *Manager) ListAllVirtualMachines(ctx context.Context, hypervisor runtime
 			continue
 		}
 
-		vmInfo, err := m.GetVirtualMachineInfo(ctx, hypervisor, api.QueryVMRequest{Name: name})
+		vmInfo, err := m.GetVirtualMachineInfo(ctx, hypervisor, contracts.QueryVMRequest{Name: name})
 		if err != nil {
 			m.logger.Warn("could not get VM info", slog.String("vm", name), slog.String("error", err.Error()))
 			continue
@@ -305,7 +305,7 @@ func domainStateToString(state libvirt.DomainState) string {
 }
 
 // DeleteVirtualMachine stops and removes a virtual machine.
-func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, request api.DeleteVMRequest) (string, error) {
+func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, request contracts.DeleteVMRequest) (string, error) {
 	domain, err := hypervisor.Conn.LookupDomainByName(request.Name)
 	if err != nil {
 		return "", fmt.Errorf("could not look up VM by name: %w", err)
@@ -360,7 +360,7 @@ func (m *Manager) DeleteVirtualMachine(ctx context.Context, hypervisor runtime.H
 }
 
 // FindVirtualMachine looks up a virtual machine by name.
-func (m *Manager) FindVirtualMachine(hypervisor runtime.HypervisorContext, name string) (*libvirt.Domain, error) {
+func (m *Manager) FindVirtualMachine(hypervisor dependencies.HypervisorContext, name string) (*libvirt.Domain, error) {
 	domain, err := hypervisor.Conn.LookupDomainByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("could not look up VM by name: %w", err)
@@ -371,7 +371,7 @@ func (m *Manager) FindVirtualMachine(hypervisor runtime.HypervisorContext, name 
 }
 
 // CheckVirtualMachineExistence checks if a VM exists.
-func (m *Manager) CheckVirtualMachineExistence(hypervisor runtime.HypervisorContext, name string) (bool, error) {
+func (m *Manager) CheckVirtualMachineExistence(hypervisor dependencies.HypervisorContext, name string) (bool, error) {
 	_, err := hypervisor.Conn.LookupDomainByName(name)
 	if err != nil {
 		if err.(libvirt.Error).Code == libvirt.ERR_NO_DOMAIN {
@@ -401,7 +401,7 @@ func (m *Manager) ToLibvirtXML(domain *libvirt.Domain) (libvirtxml.Domain, error
 }
 
 // CloneVirtualMachine clones a VM from a base domain XML without starting it.
-func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor runtime.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo api.TargetVMSpec, virtualMachineUUID uuid.UUID) error {
+func (m *Manager) CloneVirtualMachine(ctx context.Context, hypervisor dependencies.HypervisorContext, baseDomainXML libvirtxml.Domain, targetInfo contracts.TargetVMSpec, virtualMachineUUID uuid.UUID) error {
 	newDomainXML := baseDomainXML
 	newDomainXML.Name = targetInfo.Name
 	newDomainXML.UUID = virtualMachineUUID.String()

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	"github.com/terabiome/homonculus/internal/api"
-	"github.com/terabiome/homonculus/internal/runtime"
+	"github.com/terabiome/homonculus/internal/api/contracts"
+	"github.com/terabiome/homonculus/internal/dependencies"
 	"github.com/terabiome/homonculus/pkg/constants"
 	"github.com/terabiome/homonculus/pkg/executor/mkisofs"
 	"github.com/terabiome/homonculus/pkg/templator"
@@ -30,7 +30,7 @@ func NewManager(engine *templator.Engine, logger *slog.Logger) *Manager {
 }
 
 // CreateISO creates a cloud-init ISO from templates.
-func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorContext, vmRequest api.CreateVMRequest, instanceID uuid.UUID) error {
+func (m *Manager) CreateISO(ctx context.Context, hypervisor dependencies.HypervisorContext, vmRequest contracts.CreateVMRequest, instanceID uuid.UUID) error {
 	tempDir, err := os.MkdirTemp("", fmt.Sprintf("cloud-init-%s-", vmRequest.Name))
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir for cloud-init: %w", err)
@@ -80,7 +80,7 @@ func (m *Manager) CreateISO(ctx context.Context, hypervisor runtime.HypervisorCo
 	return nil
 }
 
-func (m *Manager) renderUserData(path string, vmRequest api.CreateVMRequest) error {
+func (m *Manager) renderUserData(path string, vmRequest contracts.CreateVMRequest) error {
 	vars := UserDataTemplateVars{
 		Hostname:         vmRequest.Name,
 		UserConfigs:      vmRequest.UserConfigs,
@@ -93,7 +93,7 @@ func (m *Manager) renderUserData(path string, vmRequest api.CreateVMRequest) err
 	return m.engine.RenderToFile(constants.TemplateCloudInitUserData, path, vars)
 }
 
-func (m *Manager) renderMetaData(path string, vmRequest api.CreateVMRequest, instanceID uuid.UUID) error {
+func (m *Manager) renderMetaData(path string, vmRequest contracts.CreateVMRequest, instanceID uuid.UUID) error {
 	vars := MetaDataTemplateVars{
 		InstanceID: instanceID.String(),
 		Hostname:   vmRequest.Name,
@@ -102,7 +102,7 @@ func (m *Manager) renderMetaData(path string, vmRequest api.CreateVMRequest, ins
 	return m.engine.RenderToFile(constants.TemplateCloudInitMetaData, path, vars)
 }
 
-func (m *Manager) renderNetworkConfig(path string, vmRequest api.CreateVMRequest) error {
+func (m *Manager) renderNetworkConfig(path string, vmRequest contracts.CreateVMRequest) error {
 	vars := NetworkConfigTemplateVars{
 		Hostname: vmRequest.Name,
 	}

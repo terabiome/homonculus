@@ -1,4 +1,4 @@
-package runtime
+package dependencies
 
 import (
 	"github.com/terabiome/homonculus/pkg/executor"
@@ -8,8 +8,7 @@ import (
 // HypervisorContext holds runtime dependencies for interacting with a hypervisor.
 // These fields are injected by the provisioner and contain active connections and executors.
 type HypervisorContext struct {
-	URI      string               `json:"-"`
-	Conn     *libvirt.Connect     `json:"-"`
-	Executor executor.Executor    `json:"-"`
+	URI      string            `json:"-"`
+	Conn     *libvirt.Connect  `json:"-"`
+	Executor executor.Executor `json:"-"`
 }
-

@@ -1,4 +1,4 @@
-package api
+package contracts
 
 // K3sMasterBootstrapConfig contains configuration for bootstrapping K3s master node(s).
 type K3sMasterBootstrapConfig struct {

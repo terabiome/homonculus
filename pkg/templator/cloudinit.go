@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/terabiome/homonculus/internal/api"
+	"github.com/terabiome/homonculus/internal/api/contracts"
 	"github.com/terabiome/homonculus/pkg/constants"
 )
 
 type CloudInitTemplatePlaceholder struct {
 	Hostname    string
-	UserConfigs []api.UserConfig
+	UserConfigs []contracts.UserConfig
 	Role        constants.KubernetesRole
 	Runcmds     []string
 }
