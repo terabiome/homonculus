@@ -92,19 +92,6 @@ func main() {
 					return runServer(ctx, cfg, log, cliCtx.String("address"))
 				},
 			},
-			{
-				Name:  "system",
-				Usage: "Show system information",
-				Subcommands: []*cli.Command{
-					{
-						Name:  "cpu-topology",
-						Usage: "Display CPU and NUMA topology information",
-						Action: func(cliCtx *cli.Context) error {
-							return runSystemInfo()
-						},
-					},
-				},
-			},
 		},
 	}
 
