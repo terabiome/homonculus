@@ -56,13 +56,19 @@ func (s *BootstrapService) WithOutput(stdout, stderr io.Writer) *BootstrapServic
 func (s *BootstrapService) BootstrapMasters(ctx context.Context, config contracts.K3sMasterBootstrapConfig) error {
 	s.logger.Info("starting K3s master bootstrap", slog.Int("nodes", len(config.Nodes)))
 
+	var writeMu sync.Mutex
+
 	for i, node := range config.Nodes {
 		s.logger.Info("bootstrapping K3s master",
 			slog.Int("index", i+1),
 			slog.Int("total", len(config.Nodes)),
 			slog.String("host", node.Host),
 		)
-		if err := s.bootstrapMaster(ctx, node, config.Token); err != nil {
+
+		nodeStdout := &LinePrefixer{prefix: node.Host, dest: s.stdout, mu: &writeMu}
+		nodeStderr := &LinePrefixer{prefix: node.Host, dest: s.stderr, mu: &writeMu}
+
+		if err := s.bootstrapMaster(ctx, node, nodeStdout, nodeStderr, config.Token); err != nil {
 			s.logger.Error("failed to bootstrap master",
 				slog.String("host", node.Host),
 				slog.String("error", err.Error()),
@@ -125,7 +131,7 @@ func (s *BootstrapService) BootstrapWorkers(ctx context.Context, config contract
 	return nil
 }
 
-func (s *BootstrapService) bootstrapMaster(ctx context.Context, node contracts.K3sNodeConfig, token string) error {
+func (s *BootstrapService) bootstrapMaster(ctx context.Context, node contracts.K3sNodeConfig, stdout, stderr io.Writer, token string) error {
 	// Create SSH executor with persistent connection
 	exec, err := s.createExecutor(node)
 	if err != nil {
@@ -140,7 +146,7 @@ func (s *BootstrapService) bootstrapMaster(ctx context.Context, node contracts.K
 	s.logger.Info("executing K3s master installation", slog.String("host", node.Host))
 
 	// Stream output to configured writers (defaults to os.Stdout/os.Stderr)
-	_, err = exec.Execute(ctx, s.stdout, s.stderr, cmd)
+	_, err = exec.Execute(ctx, stdout, stderr, cmd)
 
 	if err != nil {
 		s.logger.Error("master bootstrap failed", slog.String("host", node.Host))
